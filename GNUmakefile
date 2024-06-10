@@ -49,7 +49,7 @@ SUBOBJ = $(SUBSRC:.sls=.so)
 SUBWPO = $(SUBSRC:.sls=.wpo)
 
 # Top level (ie, root) library source, .. etc.
-TOPSRC = socket.chezscheme.sls
+TOPSRC = ufo-socket.sls
 TOPOBJ = $(TOPSRC:.sls=.so)
 TOPWPO = $(TOPSRC:.sls=.wpo)
 
