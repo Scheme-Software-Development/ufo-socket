@@ -104,7 +104,8 @@ $(SRFI_TOPWPO): $(TOPWPO) $(SRFI_TOPSRC) $(SRFI_SUBSRC)
 $(LIBDIR)/%: %
 	$(INSTALL) -p -D "$<" "$@"
 
-build: $(FFILIB) $(TOPWPO) $(SRFI_TOPWPO)
+build: $(FFILIB) 
+# $(TOPWPO) $(SRFI_TOPWPO)
 
 # install-ffi is always required, installations then need to decide what combination of src/so they want.
 # Default install target is for everything.

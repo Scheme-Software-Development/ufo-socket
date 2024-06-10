@@ -19,6 +19,7 @@ gen### JetBrains template
 *.sig
 
 *.so
+*.o
 *.boot
 run
 output-type-analysis
