@@ -1,0 +1,14 @@
+# ufo-socket
+
+This repository is basically a re-organized version of (chez-socket)[https://github.com/akce/chez-socket]. I just did some work making it compatible with (AKKU)[https://akkuscm.org/] and (chez-exe)[https://github.com/gwatt/chez-exe]. And apparently, it brings several convenient features.
+
+## Prerequire
+Chez Scheme, (AKKU)[https://akkuscm.org/] and (chez-exe)[https://github.com/gwatt/chez-exe].
+
+## How to use?
+In this project, you can just run two
+```bash 
+make
+```
+
+## How to test?
