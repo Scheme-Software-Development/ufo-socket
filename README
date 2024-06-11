@@ -44,8 +44,6 @@ See the *extended* source file for a list of the options that are defined.
 ```
 [proc] getnameinfo: Get host and service information from a socket.
 
-## How to test?
-
 ### Prerequest
 
 ```bash 
