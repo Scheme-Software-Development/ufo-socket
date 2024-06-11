@@ -2,7 +2,7 @@
 ;; Written by Jerry 2021
 ;; SPDX-License-Identifier: Unlicense
 
-(library (socket bytevector)
+(library (ufo-socket socket bytevector)
   (export
     bytevector-slice
     bytevector/null->string)

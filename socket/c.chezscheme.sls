@@ -2,7 +2,7 @@
 ;; Written by Jerry 2019-2021.
 ;; SPDX-License-Identifier: Unlicense
 
-(library (socket c)
+(library (ufo-socket socket c)
   (export
     create-socket-reuseaddr
     socket? socket-file-descriptor socket-accept socket-close
@@ -35,8 +35,8 @@
     )
   (import
    (chezscheme)
-   (socket bytevector)
-   (socket ftypes-util))
+   (ufo-socket socket bytevector)
+   (ufo-socket socket ftypes-util))
 
   ;; Note that 'load-shared-object' also loads, and makes available, public
   ;; symbols from shared objects linked to the library we're loading here.

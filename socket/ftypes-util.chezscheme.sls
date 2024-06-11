@@ -4,7 +4,7 @@
 
 ;; Use the chezscheme reader due to #% primitive access.
 #!chezscheme
-(library (socket ftypes-util)
+(library (ufo-socket socket ftypes-util)
   (export
    alloc
    c-function c-default-function c-enum c-bitmap

@@ -4,7 +4,7 @@
 ;;
 ;; SPDX-License-Identifier: Unlicense
 
-(library (socket impl)
+(library (ufo-socket socket impl)
   (export
     make-client-socket make-server-socket
     call-with-socket
@@ -19,8 +19,8 @@
     define-enum)
   (import
    (chezscheme)
-   (socket c))
-  (export (import (socket c)))
+   (ufo-socket socket c))
+  ; (export (import (ufo-socket socket c)))
 
   ;; [syntax] define-enum: generates a syntax transformer that evaluates the value of an enum at compile time.
   ;; eg, using trace-define-syntax:
