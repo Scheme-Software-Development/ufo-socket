@@ -10,13 +10,8 @@ make
 ```
 
 ## How to use?
-### SRFI-106 (Basic sockets)
 
-`(import (srfi :160))` or `(import (srfi :160 socket))`  to use the [srfi-106], basic style sockets interface.
-
-### Extensions
-
-`(import (ufo-socket))` to use [srfi-106] plus local extensions. These are highly experimental and have lots of room for improvement.
+`(import (ufo-socket))` to use [srfi-106](https://srfi.schemers.org/srfi-106/) plus local extensions. These are highly experimental and have lots of room for improvement.
 
 These include:
 
@@ -46,25 +41,8 @@ See the *extended* source file for a list of the options that are defined.
 ```
 ```
 [proc] getnameinfo: Get host and service information from a socket.
-```
+
 ## How to test?
-
-```
-> (define client-socket (make-client-socket "localhost" "5000"
-                                            (address-family inet)
-                                            (socket-domain stream)
-                                            (address-info v4mapped addrconfig)
-                                            (ip-protocol ip)))
-> (getnameinfo client-socket (name-info none))
-("localhost.localdomain" . "commplex-main")
-> (getnameinfo client-socket (name-info nofqdn numericserv))
-("localhost" . "5000")
-
-```
-```
-[proc] mcast-add-membership: Join IP multicast group.
-```
-A [multicast.ss](examples/multicast.ss) example app is provided that demonstrates both a multicast producer and consumer.
 
 To run an IPv4 session, open two shells. In the first shell run a producer instance:
 ```sh

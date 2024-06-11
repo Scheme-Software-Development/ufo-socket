@@ -16,13 +16,27 @@
 (library
   (ufo-socket)
   (export
-    address-info socket-opt-level socket-opt
-    socket->port
-    ;; Include the srfi-106 versions as this interface extends it, but prefer the original names
-    ;; as they're closer to the R6RS port function naming convention.
+    ;srfi-106
+    make-client-socket make-server-socket
+    socket? socket-accept socket-close socket-recv socket-send socket-shutdown
+    socket-merge-flags socket-purge-flags
+    call-with-socket
+
+    *af-unspec* *af-inet* *af-inet6*
+    *sock-stream* *sock-dgram*
+    *ai-canonname* *ai-numerichost*
+    *ai-v4mapped* *ai-all* *ai-addrconfig*
+    *ipproto-ip* *ipproto-tcp* *ipproto-udp*
+    *shut-rd* *shut-wr* *shut-rdwr*
+    address-family address-info ip-protocol message-type shutdown-method socket-domain
+
     (rename
       (open-socket-input-port socket-input-port)
-      (open-socket-output-port socket-output-port)))
+      (open-socket-output-port socket-output-port))
+
+    ;local
+    socket-opt-level socket-opt
+    socket->port)
   (import
     (chezscheme)
     (ufo-socket socket c)
