@@ -25,11 +25,12 @@
       (open-socket-output-port socket-output-port)))
   (import
     (chezscheme)
-    (socket impl))
+    (ufo-socket socket c)
+    (ufo-socket socket impl))
   ;; Re-export the implementation interface.
   ;; TODO hide internals at some point, but this is very handy while developing.
   (export
-    (import (except (socket impl) define-bits define-enum)))
+    (import (except (ufo-socket socket impl) define-bits define-enum)))
 
   ;; See netdb.h(0P)
   (define-bits address-info
