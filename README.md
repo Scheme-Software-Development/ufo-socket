@@ -1,11 +1,11 @@
 # ufo-socket
 
-This repository is basically a re-organized version of (chez-socket)[https://github.com/akce/chez-socket]. I just did some work making it compatible with (AKKU)[https://akkuscm.org/] and (chez-exe)[https://github.com/gwatt/chez-exe] and fixing bugs. Apparently, it brings several convenient features for reusing it in other softwares.
+This repository is basically a re-organized version of [chez-socket](https://github.com/akce/chez-socket). I just did some work making it compatible with [AKKU](https://akkuscm.org/) and [chez-exe](https://github.com/gwatt/chez-exe) and fixing bugs. Apparently, it brings several convenient features for reusing it in other softwares.
 
 This repository requires Linux socket library.
 
 ## Prerequire
-Chez Scheme, (AKKU)[https://akkuscm.org/] and (chez-exe)[https://github.com/gwatt/chez-exe]. In addition, you should firstly compile the C dependency with command.
+Chez Scheme, [AKKU](https://akkuscm.org/) and [chez-exe](https://github.com/gwatt/chez-exe). In addition, you should firstly compile the C dependency with command.
 
 ```bash 
 make
