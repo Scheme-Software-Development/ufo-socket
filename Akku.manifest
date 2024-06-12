@@ -2,7 +2,7 @@
 (import (akku format manifest))
 
 (akku-package ("ufo-socket" "1.0.0")
-  (synopsis "I did not edit Akku.manifest")
+  (synopsis "Well, just a socket")
   (authors "WANG Zheng")
   (license "MIT")
   (depends ("chez-srfi" ">=0.0.0-akku <1.0.0"))
