@@ -43,12 +43,26 @@ See the *extended* source file for a list of the options that are defined.
 ```
 ```
 [proc] getnameinfo: Get host and service information from a socket.
-
-### Prerequest
+```
+### Import this package in other project
+This repository is released on AKKU, if you want to use it in other project, some command should be executed:
 
 ```bash 
+#in you project root
+akku install ufo-socket
+#if you have directory with same name, just let this command go
+mkdir socket
+
+cd bash .akku/env
+cd .akku/src/ufo-socket/
 make
-akku install
+
+#following two command to make compiled files reachable
+mv socket/*.o ../../../socket/
+mv socket/*.so ../../../socket/
+
+cd ../../..
+#make scheme code reachable in your scheme session
 bash .akku/env
 ```
 
