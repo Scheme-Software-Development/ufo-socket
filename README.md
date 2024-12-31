@@ -44,6 +44,38 @@ See the *extended* source file for a list of the options that are defined.
 ```
 [proc] getnameinfo: Get host and service information from a socket.
 ```
+### Run tests from source
+```bash 
+#in you project root
+#solve scheme depdendency
+akku install 
+bash .akku/env
+#compile c source
+make 
+```
+
+#### IPv4 session
+Open two shells. In the first shell run a producer instance:
+```sh
+scheme --script tests/multicast.ss p4
+```
+And then in the second shell, run the consumer instance:
+```sh
+scheme --script tests/multicast.ss c4
+```
+
+#### Server/Client 
+Open two shells. In the first shell run:
+```sh
+scheme --script tests/server.ss 
+```
+
+And then in the second shell, run the client:
+
+```sh
+scheme --script tests/client.ss 
+```
+
 ### Import this package in other project
 This repository is released on AKKU, if you want to use it in other project, some command should be executed:
 
@@ -53,7 +85,7 @@ akku install ufo-socket
 #if you have directory with same name, just let this command go
 mkdir socket
 
-cd bash .akku/env
+bash .akku/env
 cd .akku/src/ufo-socket/
 make
 
@@ -64,26 +96,4 @@ mv socket/*.so ../../../socket/
 cd ../../..
 #make scheme code reachable in your scheme session
 bash .akku/env
-```
-
-### IPv4 session
-Open two shells. In the first shell run a producer instance:
-```sh
-scheme --script tests/multicast.ss p4
-```
-And then in the second shell, run the consumer instance:
-```sh
-scheme --script tests/multicast.ss c4
-```
-
-### Server/Client 
-Open two shells. In the first shell run:
-```sh
-scheme --script tests/server.ss 
-```
-
-And then in the second shell, run the client:
-
-```sh
-scheme --script tests/client.ss 
 ```
