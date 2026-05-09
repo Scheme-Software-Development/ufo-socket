@@ -212,10 +212,13 @@ bash .akku/env
 
 | Procedure | Description |
 |---|---|
+| `socket-recv!` | Zero-allocation recv into a caller-provided bytevector |
 | `socket-recvfrom/address` | UDP `recvfrom` that returns `(values data host service)` |
 | `socket-set-timeout!` | Sets `SO_RCVTIMEO` / `SO_SNDTIMEO` in seconds |
+| `socket-set-nonblocking!` | Enable/disable `O_NONBLOCK` via `fcntl` |
 | `make-unix-client-socket` | Create an `AF_UNIX` client socket |
 | `make-unix-server-socket` | Create an `AF_UNIX` listening socket |
+| `mcast-drop-membership` | Leave a multicast group |
 | `getaddrinfo*` | Resolve host/service to a list of addrinfo records |
 | `socket-error?` | Predicate for the new structured exception type |
 | `socket-error-who` / `-errno` / `-message` | Accessors for `socket-error` |
