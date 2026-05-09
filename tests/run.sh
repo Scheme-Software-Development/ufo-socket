@@ -28,7 +28,15 @@ else
     exit 1
 fi
 
-echo "=== Test 2: Multicast (best effort) ==="
+echo "=== Test 2: Unit tests (UDP, errors, bytevector) ==="
+if scheme --script tests/unit.ss; then
+    echo "PASS: Unit tests"
+else
+    echo "FAIL: Unit tests"
+    exit 1
+fi
+
+echo "=== Test 3: Multicast (best effort) ==="
 timeout 6 scheme --script tests/multicast.ss c4 > /tmp/mcast-consumer.log 2>&1 &
 CONSUMER_PID=$!
 sleep 1

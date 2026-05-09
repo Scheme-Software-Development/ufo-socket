@@ -16,36 +16,89 @@
 (library
   (ufo-socket)
   (export
-    ;srfi-106
+    ;;; SRFI-106 core
     make-client-socket make-server-socket
     socket? socket-accept socket-close socket-recv socket-send socket-shutdown
     socket-merge-flags socket-purge-flags
     call-with-socket
 
+    ;;; Address families
     *af-unspec* *af-inet* *af-inet6*
+    address-family
+
+    ;;; Socket domains / types
     *sock-stream* *sock-dgram*
+    socket-domain
+
+    ;;; Address info flags
     *ai-canonname* *ai-numerichost*
     *ai-v4mapped* *ai-all* *ai-addrconfig*
-    *ipproto-ip* *ipproto-tcp* *ipproto-udp*
-    *shut-rd* *shut-wr* *shut-rdwr*
-    address-family address-info ip-protocol message-type shutdown-method socket-domain
+    *ai-numericserv* *ai-passive*
+    address-info
 
+    ;;; IP protocols
+    *ipproto-ip* *ipproto-tcp* *ipproto-udp*
+    ip-protocol
+
+    ;;; Message flags
+    *msg-oob* *msg-peek* *msg-waitall*
+    message-type
+
+    ;;; Shutdown methods
+    *shut-rd* *shut-wr* *shut-rdwr*
+    shutdown-method
+
+    ;;; Name resolution
+    name-info
+    getnameinfo gethostname getaddrinfo*
+    *ni-namereqd* *ni-dgram* *ni-nofqdn* *ni-numerichost* *ni-numericserv*
+    *ni-maxhost* *ni-maxserv*
+
+    ;;; Socket ports
+    open-socket-input-port open-socket-output-port open-socket-input/output-port
     (rename
       (open-socket-input-port socket-input-port)
       (open-socket-output-port socket-output-port))
+    socket->port
 
-    ;local
+    ;;; Socket options
     socket-opt-level socket-opt
-    socket->port)
+    *sol-socket*
+    *so-acceptconn* *so-broadcast* *so-domain* *so-dontroute* *so-error*
+    *so-keepalive* *so-linger* *so-oobinline* *so-protocol* *so-reuseaddr* *so-type*
+    *ip-multicast-loop* *ip-multicast-ttl* *ip-multicast-if*
+    *ip-add-membership* *ip-drop-membership*
+    socket-get-int socket-set-int!
+
+    ;;; Peer info
+    socket-peerinfo
+    socket-recvfrom socket-recvfrom/address
+
+    ;;; Multicast
+    mcast-add-membership
+
+    ;;; Timeouts
+    socket-set-timeout!
+    *so-rcvtimeo* *so-sndtimeo*
+
+    ;;; Unix domain sockets
+    *af-unix*
+    make-unix-client-socket make-unix-server-socket
+
+    ;;; Connection helpers (low-level but stable)
+    connect-client-socket connect-server-socket
+    create-socket-reuseaddr
+
+    ;;; Non-blocking / error constants
+    *eagain* *ewouldblock* *eintr*
+
+    ;;; Structured exceptions
+    socket-error socket-error? raise-socket-error)
   (import
     (chezscheme)
     (ufo-socket socket c)
     (ufo-socket socket impl)
     (ufo-socket socket ftypes-util))
-  ;; Re-export the implementation interface.
-  (export
-    (import (ufo-socket socket c))
-    (import (ufo-socket socket impl)))
 
   ;; See netdb.h(0P)
   (define-bits address-info

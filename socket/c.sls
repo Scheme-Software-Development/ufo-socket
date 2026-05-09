@@ -19,6 +19,7 @@
     *ai-numericserv* *ai-passive*
     socket-get-int socket-set-int!
     *ip-multicast-loop* *ip-multicast-ttl* *ip-multicast-if*
+    *ip-add-membership* *ip-drop-membership*
 
     *sol-socket*
     *so-acceptconn* *so-broadcast* *so-domain* *so-dontroute* *so-error* *so-keepalive* *so-linger* *so-oobinline*
@@ -27,12 +28,20 @@
     *ni-namereqd* *ni-dgram* *ni-nofqdn* *ni-numerichost* *ni-numericserv*
     *ni-maxhost* *ni-maxserv*
     *eagain* *ewouldblock* *eintr*
+    *so-rcvtimeo* *so-sndtimeo*
+    *af-unix*
+    *sizeof-sockaddr-un*
 
     (rename
       (getnameinfo/bv getnameinfo)
       (gethostname* gethostname))
 
     mcast-add-membership
+    socket-error socket-error? raise-socket-error
+    getaddrinfo*
+    socket-recvfrom/address
+    socket-set-timeout!
+    make-unix-client-socket make-unix-server-socket
     )
   (import
    (chezscheme)
@@ -42,6 +51,19 @@
 
   ;; Re-export all POSIX constants so downstream libraries don't need to
   ;; import posix-ffi directly.
+
+  ;; Structured exception type for socket operations.
+  (define-record-type socket-error
+    (fields who errno message))
+
+  (define raise-socket-error
+    (case-lambda
+      [(who msg)
+       (raise (make-socket-error who #f msg))]
+      [(who errno msg)
+       (raise (make-socket-error who errno msg))]
+      [(who errno fmt . args)
+       (raise (make-socket-error who errno (apply format fmt args)))]))
 
   ;; [parameter] create-socket-reuseaddr: legacy parameter for SO_REUSEADDR.
   ;; Prefer passing #:reuse-addr? to make-server-socket/connect-server-socket.
@@ -74,7 +96,7 @@
           [(or (fx=? errno *eagain*) (fx=? errno *ewouldblock*) (fx=? errno *eintr*))
            #f]
           [else
-           (error 'socket-accept (strerror errno) sock errno)]))))
+           (raise-socket-error 'socket-accept errno "~a" (strerror errno))]))))
 
   (define socket-recv
     (case-lambda
@@ -88,8 +110,10 @@
               (bytevector-slice buf rc)]
              [(fx=? rc 0)	; socket EOF.
               0]
+             [(or (fx=? errno *eagain*) (fx=? errno *ewouldblock*) (fx=? errno *eintr*))
+              #f]
              [else
-               (error 'socket-recv (strerror errno) errno)])))]))
+               (raise-socket-error 'socket-recv errno "~a" (strerror errno))])))]))
 
   ;; [proc] socket-recvfrom: recv data and sender info.
   ;; [return] (cons data-u8-bytevector sockaddr-u8-bytevector)
@@ -108,8 +132,10 @@
               (cons (bytevector-slice buf rc) (bytevector-slice saddr (ftype-ref socklen-t () &salen)))]
              [(fx=? rc 0)	; socket EOF.
               0]
+             [(or (fx=? errno *eagain*) (fx=? errno *ewouldblock*) (fx=? errno *eintr*))
+              #f]
              [else
-               (error 'socket-recvfrom (strerror errno) errno)])))]))
+               (raise-socket-error 'socket-recvfrom errno "~a" (strerror errno))])))]))
 
   (define socket-send
     (case-lambda
@@ -129,8 +155,10 @@
            (cond
              [(fx>=? rc 0)
               rc]
+             [(or (fx=? errno *eagain*) (fx=? errno *ewouldblock*) (fx=? errno *eintr*))
+              #f]
              [else
-               (error 'socket-send (strerror errno) errno)])))]))
+               (raise-socket-error 'socket-send errno "~a" (strerror errno))])))]))
 
   (define socket-close
     (lambda (sock)
@@ -149,7 +177,7 @@
           (let-values ([(rc errno) (call-procedure/errno f (socket-file-descriptor sock) level optname &res &sz)])
             (cond
               [(fx=? rc -1)
-               (error 'socket-get-int (strerror errno) errno)]
+               (raise-socket-error 'socket-get-int errno "~a" (strerror errno))]
               [else
                 (ftype-ref int () &res 0)]))))))
 
@@ -167,7 +195,7 @@
                           level optname &val (ftype-sizeof int))])
             (cond
               [(fx=? rc -1)
-               (error 'socket-set-int! (strerror errno) errno)]
+               (raise-socket-error 'socket-set-int! errno "~a" (strerror errno))]
               [else
                 rc]))))))
 
@@ -181,7 +209,7 @@
           (cond
             [(null? as)
              (freeaddrinfo-list addrinfos)
-             (error 'connect-socket "no suitable address found" node service family socktype flags protocol)]
+             (raise-socket-error 'connect-socket #f "no suitable address found: ~a ~a" node service)]
             [else
               (let* ([ai (car as)]
                      [sockfd (socket (addrinfo-family ai) (addrinfo-socktype ai) (addrinfo-protocol ai))])
@@ -215,7 +243,7 @@
                   [else
                     (loop (addrinfo-next next) (cons next acc))]))]
              [else
-               (error 'getaddrinfo (gai-strerror rc) (list node service))])))]))
+               (raise-socket-error 'getaddrinfo rc "~a" (gai-strerror rc))])))]))
 
   ;; freeaddrinfo releases the entire C linked list starting at the head node.
   ;; The Scheme list merely holds pointers into that list.
@@ -245,7 +273,7 @@
               (bytevector/null->string host)
               (bytevector/null->string serv))]
            [else
-             (error 'getnameinfo (gai-strerror rc))]))]))
+             (raise-socket-error 'getnameinfo rc "~a" (gai-strerror rc))]))]))
 
   (define gethostname*
     (lambda ()
@@ -255,7 +283,7 @@
           [(fx=? rc 0)
            (bytevector/null->string buf)]
           [else
-            (error 'gethostname (strerror errno) errno)]))))
+            (raise-socket-error 'gethostname errno "~a" (strerror errno))]))))
 
   (define socket-peerinfo
     (case-lambda
@@ -267,6 +295,19 @@
          (let* ([saddr (make-bytevector *s-sizeof-sockaddr*)]
                 [rc (getpeername (socket-file-descriptor sock) saddr &salen)])
            (getnameinfo/bv (bytevector-slice saddr (ftype-ref socklen-t () &salen)) flags)))]))
+
+  (define socket-recvfrom/address
+    (case-lambda
+      [(sock len)
+       (socket-recvfrom/address sock len 0)]
+      [(sock len flags)
+       (let ([result (socket-recvfrom sock len flags)])
+         (if (pair? result)
+             (let ([data (car result)]
+                   [saddr (cdr result)])
+               (let-values ([(host service) (getnameinfo/bv saddr)])
+                 (values data host service)))
+             result))]))
 
   (define mcast-add-membership
     (case-lambda
@@ -281,6 +322,52 @@
             (mcast6-add-membership (socket-file-descriptor sock) node interface)]
            [else
              #f]))]))
+
+  (define socket-set-timeout!
+    (lambda (sock recv-sec send-sec)
+      (let-values ([(rc errno) (call-procedure/errno socket-set-timeout
+                                  (socket-file-descriptor sock)
+                                  (if recv-sec recv-sec -1) 0
+                                  (if send-sec send-sec -1) 0)])
+        (when (fx=? rc -1)
+          (raise-socket-error 'socket-set-timeout! errno "~a" (strerror errno))))))
+
+  (define make-unix-client-socket
+    (lambda (path)
+      (let ([sockfd (socket *af-unix* *sock-stream* 0)])
+        (when (fx=? sockfd -1)
+          (raise-socket-error 'make-unix-client-socket ((get-errno-proc)) "socket creation failed"))
+        (let ([addr (make-sockaddr-un path)])
+          (when (eqv? addr 0)
+            (close sockfd)
+            (raise-socket-error 'make-unix-client-socket #f "failed to allocate sockaddr_un"))
+          (let-values ([(rc errno) (call-procedure/errno connect sockfd addr *sizeof-sockaddr-un*)])
+            (foreign-free addr)
+            (if (fx=? rc 0)
+                (make-socket sockfd)
+                (begin
+                  (close sockfd)
+                  (raise-socket-error 'make-unix-client-socket errno "~a" (strerror errno)))))))))
+
+  (define make-unix-server-socket
+    (lambda (path)
+      (let ([sockfd (socket *af-unix* *sock-stream* 0)])
+        (when (fx=? sockfd -1)
+          (raise-socket-error 'make-unix-server-socket ((get-errno-proc)) "socket creation failed"))
+        (socket-set-int! sockfd *sol-socket* *so-reuseaddr* 1)
+        (let ([addr (make-sockaddr-un path)])
+          (when (eqv? addr 0)
+            (close sockfd)
+            (raise-socket-error 'make-unix-server-socket #f "failed to allocate sockaddr_un"))
+          (let-values ([(rc errno) (call-procedure/errno bind sockfd addr *sizeof-sockaddr-un*)])
+            (foreign-free addr)
+            (if (fx=? rc 0)
+                (begin
+                  (listen sockfd *somaxconn*)
+                  (make-socket sockfd))
+                (begin
+                  (close sockfd)
+                  (raise-socket-error 'make-unix-server-socket errno "~a" (strerror errno)))))))))
 
   ;; Configure a thread-safe errno accessor backed by our C helper.
   (get-errno-proc (foreign-procedure "c_errno" () int))

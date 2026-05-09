@@ -103,10 +103,10 @@ $(AKKU_LIB_SOCKET)/posix-ffi.chezscheme.sls: socket/posix-ffi.sls
 # Build target is structured so that the main wpo file is dependant on all scheme source files and triggers
 # a Chez compile such that Chez rebuilds all dependancies on demand.
 $(TOPWPO): $(TOPSRC) $(SUBSRC) $(AKKU_LIB_SOCKET)/posix-ffi.chezscheme.sls
-	echo '(reset-handler abort) (compile-imported-libraries #t) (generate-wpo-files #t) (library-directories ".akku/lib") (compile-library "'$(TOPSRC)'")' | $(SCHEME) $(SFLAGS)
+	echo '(reset-handler abort) (compile-imported-libraries #t) (generate-wpo-files #t) (library-directories ".akku/lib") (compile-library "$(TOPSRC)")' | $(SCHEME) $(SFLAGS)
 
 $(SRFI_TOPWPO): $(TOPWPO) $(SRFI_TOPSRC) $(SRFI_SUBSRC)
-	echo '(reset-handler abort) (compile-imported-libraries #t) (generate-wpo-files #t) (library-directories ".akku/lib") (compile-library "'$(SRFI_TOPSRC)'")' | $(SCHEME) $(SFLAGS)
+	echo '(reset-handler abort) (compile-imported-libraries #t) (generate-wpo-files #t) (library-directories ".akku/lib") (compile-library "$(SRFI_TOPSRC)")' | $(SCHEME) $(SFLAGS)
 
 $(LIBDIR)/%: %
 	$(INSTALL) -p -D "$<" "$@"
@@ -131,6 +131,7 @@ install-srfi-so: $(ISRFI_TOPWPO) $(ISRFI_SUBWPO) $(ISRFI_TOPOBJ) $(ISRFI_SUBOBJ)
 
 clean:
 	$(RM) $(FFIOBJ) $(FFILIB) $(TOPOBJ) $(TOPWPO) $(SUBOBJ) $(SUBWPO) $(SRFI_TOPWPO) $(SRFI_SUBWPO) $(SRFI_SUBOBJ) $(SRFI_TOPOBJ)
+	$(RM) $(AKKU_LIB_SOCKET)/*.so $(AKKU_LIB_SOCKET)/*.wpo .akku/lib/ufo-socket.chezscheme.so .akku/lib/ufo-socket.chezscheme.wpo
 
 clean-install:
 	$(RM) $(IFFIOBJ) $(IFFILIB) $(ITOPOBJ) $(ITOPWPO) $(ISUBOBJ) $(ISUBWPO) $(ITOPSRC) $(ISUBSRC) $(ISRFI_TOPWPO) $(ISRFI_SUBWPO) $(ISRFI_SUBOBJ) $(ISRFI_TOPOBJ) $(ISRFI_SUBSRC) $(ISRFI_TOPSRC)

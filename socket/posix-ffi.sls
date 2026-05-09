@@ -22,6 +22,9 @@
     *ni-maxhost* *ni-maxserv*
     *s-sizeof-sockaddr*
     *eagain* *ewouldblock* *eintr*
+    *so-rcvtimeo* *so-sndtimeo*
+    *af-unix*
+    *sizeof-sockaddr-un*
 
     ;; ftypes
     addrinfo* sockaddr* socklen-t
@@ -33,6 +36,7 @@
     make-addrinfo-hints addrinfo-flags addrinfo-family addrinfo-socktype
     addrinfo-protocol addrinfo-addrlen addrinfo-addr addrinfo-next
     mcast4-add-membership mcast6-add-membership
+    socket-set-timeout make-sockaddr-un
 
     ;; Socket record type
     sockobj make-socket socket? socket-file-descriptor)
@@ -89,7 +93,10 @@
     *ni-namereqd* *ni-dgram* *ni-nofqdn* *ni-numerichost* *ni-numericserv*
     *ni-maxhost* *ni-maxserv*
     *s-sizeof-sockaddr*
-    *eagain* *ewouldblock* *eintr*)
+    *eagain* *ewouldblock* *eintr*
+    *so-rcvtimeo* *so-sndtimeo*
+    *af-unix*
+    *sizeof-sockaddr-un*)
 
   (define-ftype addrinfo* void*)
   (define-ftype sockaddr* void*)
@@ -133,7 +140,9 @@
 
     ;; multicasting.
     [mcast4-add-membership (int string int) int]
-    [mcast6-add-membership (int string int) int])
+    [mcast6-add-membership (int string int) int]
+    [socket-set-timeout (int long long long long) int]
+    [make-sockaddr-un (string) void*])
 
   ;; The socket record type.
   (define-record-type (sockobj make-socket socket?)

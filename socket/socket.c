@@ -11,6 +11,7 @@
  */
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/un.h>
 #include <netinet/in.h>
 #include <netinet/ip.h>
 #include <netdb.h>
@@ -20,6 +21,7 @@
 #include <stdio.h>	// printf
 #include <stdlib.h>	// calloc, malloc
 #include <unistd.h>	// close
+#include <string.h>	// strncpy
 
 // TODO set -1 #if !defined(n).
 #define C_CONST_INT(n) const int c_ ## n = n
@@ -102,6 +104,10 @@ C_CONST_INT(NI_IDN_USE_STD3_ASCII_RULES);
 C_CONST_INT(NI_MAXHOST);
 C_CONST_INT(NI_MAXSERV);
 
+/* Socket timeout options. */
+C_CONST_INT(SO_RCVTIMEO);
+C_CONST_INT(SO_SNDTIMEO);
+
 /* Errno values commonly needed for non-blocking socket handling. */
 C_CONST_INT(EAGAIN);
 C_CONST_INT(EWOULDBLOCK);
@@ -109,6 +115,44 @@ C_CONST_INT(EINTR);
 
 /* Thread-safe errno accessor (avoids relying on Chez internals). */
 int c_errno(void) { return errno; }
+
+/* socket_set_timeout: set receive and/or send timeout.
+ * Pass negative values to leave a timeout unchanged.
+ * returns: 0 on success, -1 on error (errno set).
+ */
+int
+socket_set_timeout(int fd, long recv_sec, long recv_usec, long send_sec, long send_usec)
+	{
+	int rc = 0;
+	if (recv_sec >= 0 || recv_usec >= 0)
+		{
+		struct timeval tv = { .tv_sec = recv_sec, .tv_usec = recv_usec };
+		rc = setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+		if (rc < 0) return rc;
+		}
+	if (send_sec >= 0 || send_usec >= 0)
+		{
+		struct timeval tv = { .tv_sec = send_sec, .tv_usec = send_usec };
+		rc = setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+		}
+	return rc;
+	}
+
+/* AF_UNIX support. */
+C_CONST_INT(AF_UNIX);
+const int c_SIZEOF_SOCKADDR_UN = sizeof(struct sockaddr_un);
+
+struct sockaddr_un*
+make_sockaddr_un(const char* path)
+	{
+	struct sockaddr_un* addr = calloc(sizeof(*addr), 1);
+	if (addr)
+		{
+		addr->sun_family = AF_UNIX;
+		strncpy(addr->sun_path, path, sizeof(addr->sun_path) - 1);
+		}
+	return addr;
+	}
 
 /* See getaddrinfo(2) for a full C client/server example. */
 
