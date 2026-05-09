@@ -57,6 +57,12 @@ See the *extended* source file for a list of the options that are defined.
 [proc] getnameinfo: Get host and service information from a socket address.
                      Returns (values host-string service-string).
 ```
+```
+[proc] gethostname: Return the hostname of the local machine.
+```
+```
+[proc] getaddrinfo*: Resolve a node/service to a list of addrinfo records.
+```
 
 ### Non-blocking sockets
 
@@ -64,6 +70,14 @@ See the *extended* source file for a list of the options that are defined.
 [proc] socket-accept: Accept a connection. On blocking sockets this waits until
                        a peer connects. On non-blocking sockets it returns #f
                        when no connection is pending (EAGAIN/EWOULDBLOCK/EINTR).
+```
+```
+[proc] socket-recv:  Receive data. Returns a bytevector, 0 for EOF, or #f on
+                       EAGAIN/EWOULDBLOCK/EINTR in non-blocking mode.
+```
+```
+[proc] socket-send:  Send data. Returns bytes sent, or #f on EAGAIN/EWOULDBLOCK/EINTR
+                       in non-blocking mode.
 ```
 
 ### Server socket with SO_REUSEADDR
@@ -75,6 +89,44 @@ See the *extended* source file for a list of the options that are defined.
 
 The legacy parameter `create-socket-reuseaddr` still works, but passing an explicit argument is preferred.
 
+### Unix Domain Sockets (AF_UNIX)
+
+```scheme
+(let ([path "/tmp/mysocket.sock"])
+  (when (file-exists? path) (delete-file path))
+  (let ([srv (make-unix-server-socket path)])
+    (let ([cli (make-unix-client-socket path)])
+      (socket-send cli (string->utf8 "hello"))
+      (let ([conn (socket-accept srv)])
+        (socket-recv conn 100)
+        ...))))
+```
+
+### Socket timeouts
+
+```scheme
+(socket-set-timeout! sock 5 5)   ; 5 second receive and send timeout
+```
+
+### UDP recvfrom with sender address
+
+```scheme
+(let-values ([(data host service) (socket-recvfrom/address sock 1024)])
+  ...)
+```
+
+### Structured exceptions
+
+All socket errors are raised as `socket-error` records:
+
+```scheme
+(guard (e [(socket-error? e)
+           (display (socket-error-who e))
+           (display (socket-error-errno e))
+           (display (socket-error-message e))])
+  (make-client-socket "bad.host" "80"))
+```
+
 ### Run tests
 
 ```bash
@@ -82,7 +134,7 @@ bash .akku/env
 bash tests/run.sh
 ```
 
-The runner performs automated Echo Server/Client tests. Multicast tests are best-effort: they may be skipped on containers or VMs where multicast forwarding is not available.
+The runner performs automated Echo Server/Client tests, a comprehensive unit test suite (bytevector, UDP loopback, connection errors, AF_UNIX, timeouts), and best-effort multicast tests.
 
 #### Manual tests
 
