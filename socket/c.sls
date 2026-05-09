@@ -36,12 +36,13 @@
       (getnameinfo/bv getnameinfo)
       (gethostname* gethostname))
 
-    mcast-add-membership
+    mcast-add-membership mcast-drop-membership
     socket-error socket-error? raise-socket-error
     getaddrinfo*
     socket-recvfrom/address
     socket-set-timeout!
     make-unix-client-socket make-unix-server-socket
+    socket-recv! socket-set-nonblocking!
     )
   (import
    (chezscheme)
@@ -108,12 +109,32 @@
            (cond
              [(fx>? rc 0)
               (bytevector-slice buf rc)]
-             [(fx=? rc 0)	; socket EOF.
-              0]
+             [(fx=? rc 0)
+              ;; UDP datagram sockets may return 0 for an empty datagram.
+              ;; TCP stream sockets return 0 for EOF.
+              (if (fx=? (socket-get-int sock *sol-socket* *so-type*) *sock-dgram*)
+                  (bytevector-slice buf 0)
+                  0)]
              [(or (fx=? errno *eagain*) (fx=? errno *ewouldblock*) (fx=? errno *eintr*))
               #f]
              [else
                (raise-socket-error 'socket-recv errno "~a" (strerror errno))])))]))
+
+  ;; [proc] socket-recv!: receive data into an existing bytevector.
+  ;; [return] bytes read, 0 for EOF, or #f on EAGAIN.
+  (define socket-recv!
+    (case-lambda
+      [(sock buf)
+       (socket-recv! sock buf 0)]
+      [(sock buf flags)
+       (let-values ([(rc errno) (call-procedure/errno recv (socket-file-descriptor sock) buf (bytevector-length buf) flags)])
+         (cond
+           [(fx>? rc 0) rc]
+           [(fx=? rc 0) 0]
+           [(or (fx=? errno *eagain*) (fx=? errno *ewouldblock*) (fx=? errno *eintr*))
+            #f]
+           [else
+             (raise-socket-error 'socket-recv! errno "~a" (strerror errno))]))]))
 
   ;; [proc] socket-recvfrom: recv data and sender info.
   ;; [return] (cons data-u8-bytevector sockaddr-u8-bytevector)
@@ -130,8 +151,11 @@
            (cond
              [(fx>? rc 0)
               (cons (bytevector-slice buf rc) (bytevector-slice saddr (ftype-ref socklen-t () &salen)))]
-             [(fx=? rc 0)	; socket EOF.
-              0]
+             [(fx=? rc 0)
+              ;; UDP may return 0 for an empty datagram.
+              (if (fx=? (socket-get-int sock *sol-socket* *so-type*) *sock-dgram*)
+                  (cons (bytevector-slice buf 0) (bytevector-slice saddr (ftype-ref socklen-t () &salen)))
+                  0)]
              [(or (fx=? errno *eagain*) (fx=? errno *ewouldblock*) (fx=? errno *eintr*))
               #f]
              [else
@@ -323,6 +347,20 @@
            [else
              #f]))]))
 
+  (define mcast-drop-membership
+    (case-lambda
+      [(sock node)
+       (mcast-drop-membership sock node 0)]
+      [(sock node interface)
+       (let ([domain (socket-get-int sock *sol-socket* *so-domain*)])
+         (cond
+           [(= domain *af-inet*)
+            (mcast4-drop-membership (socket-file-descriptor sock) node interface)]
+           [(= domain *af-inet6*)
+            (mcast6-drop-membership (socket-file-descriptor sock) node interface)]
+           [else
+             #f]))]))
+
   (define socket-set-timeout!
     (lambda (sock recv-sec send-sec)
       (let-values ([(rc errno) (call-procedure/errno socket-set-timeout
@@ -331,6 +369,14 @@
                                   (if send-sec send-sec -1) 0)])
         (when (fx=? rc -1)
           (raise-socket-error 'socket-set-timeout! errno "~a" (strerror errno))))))
+
+  (define socket-set-nonblocking!
+    (lambda (sock nonblocking)
+      (let-values ([(rc errno) (call-procedure/errno socket-set-nonblocking
+                                  (socket-file-descriptor sock)
+                                  (if nonblocking 1 0))])
+        (when (fx=? rc -1)
+          (raise-socket-error 'socket-set-nonblocking! errno "~a" (strerror errno))))))
 
   (define make-unix-client-socket
     (lambda (path)

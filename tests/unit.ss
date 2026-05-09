@@ -91,6 +91,24 @@
   (socket-close srv)
   (assert-equal 'set-timeout! 'ok 'ok))
 
+;;; socket-recv! test
+(let ([srv (connect-server-socket #f "15003" *af-inet* *sock-dgram* 0 *ipproto-udp*)])
+  (let ([cli (connect-client-socket "127.0.0.1" "15003" *af-inet* *sock-dgram* 0 *ipproto-udp*)])
+    (socket-send cli (string->utf8 "recv!"))
+    (let ([buf (make-bytevector 100)])
+      (let ([n (socket-recv! srv buf)])
+        (assert-equal 'socket-recv!-len 5 n)
+        (assert-equal 'socket-recv!-data "recv!" (utf8->string (bytevector-slice buf n)))))
+    (socket-close cli)
+    (socket-close srv)))
+
+;;; socket-set-nonblocking! test
+(let ([srv (connect-server-socket #f "15004" *af-inet* *sock-dgram* 0 *ipproto-udp*)])
+  (socket-set-nonblocking! srv #t)
+  (let ([data (socket-recv srv 100)])
+    (assert-equal 'nonblocking-recv #f data))
+  (socket-close srv))
+
 ;;; Summary
 (display "=== ")(display pass-count)(display " passed, ")(display fail-count)(display " failed ===")(newline)
 (if (> fail-count 0) (exit 1) (exit 0))

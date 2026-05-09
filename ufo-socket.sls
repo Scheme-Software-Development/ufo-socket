@@ -61,6 +61,9 @@
       (open-socket-output-port socket-output-port))
     socket->port
 
+    ;;; Zero-allocation recv
+    socket-recv!
+
     ;;; Socket options
     socket-opt-level socket-opt
     *sol-socket*
@@ -75,10 +78,10 @@
     socket-recvfrom socket-recvfrom/address
 
     ;;; Multicast
-    mcast-add-membership
+    mcast-add-membership mcast-drop-membership
 
-    ;;; Timeouts
-    socket-set-timeout!
+    ;;; Timeouts & non-blocking
+    socket-set-timeout! socket-set-nonblocking!
     *so-rcvtimeo* *so-sndtimeo*
 
     ;;; Unix domain sockets

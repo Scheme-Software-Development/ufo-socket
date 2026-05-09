@@ -36,7 +36,9 @@
     make-addrinfo-hints addrinfo-flags addrinfo-family addrinfo-socktype
     addrinfo-protocol addrinfo-addrlen addrinfo-addr addrinfo-next
     mcast4-add-membership mcast6-add-membership
+    mcast4-drop-membership mcast6-drop-membership
     socket-set-timeout make-sockaddr-un
+    socket-set-nonblocking
 
     ;; Socket record type
     sockobj make-socket socket? socket-file-descriptor)
@@ -141,8 +143,11 @@
     ;; multicasting.
     [mcast4-add-membership (int string int) int]
     [mcast6-add-membership (int string int) int]
+    [mcast4-drop-membership (int string int) int]
+    [mcast6-drop-membership (int string int) int]
     [socket-set-timeout (int long long long long) int]
-    [make-sockaddr-un (string) void*])
+    [make-sockaddr-un (string) void*]
+    [socket-set-nonblocking (int int) int])
 
   ;; The socket record type.
   (define-record-type (sockobj make-socket socket?)

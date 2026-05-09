@@ -17,6 +17,7 @@
 #include <netdb.h>
 #include <arpa/inet.h>	// inet_pton
 #include <errno.h>
+#include <fcntl.h>
 
 #include <stdio.h>	// printf
 #include <stdlib.h>	// calloc, malloc
@@ -154,6 +155,19 @@ make_sockaddr_un(const char* path)
 	return addr;
 	}
 
+/* socket_set_nonblocking: enable or disable O_NONBLOCK.
+ * returns: 0 on success, -1 on error (errno set).
+ */
+int
+socket_set_nonblocking(int fd, int nonblocking)
+	{
+	int flags = fcntl(fd, F_GETFL, 0);
+	if (flags < 0)
+		return -1;
+	flags = nonblocking ? (flags | O_NONBLOCK) : (flags & ~O_NONBLOCK);
+	return fcntl(fd, F_SETFL, flags);
+	}
+
 /* See getaddrinfo(2) for a full C client/server example. */
 
 /* addrinfo accessors. */
@@ -233,6 +247,51 @@ mcast6_add_membership(int fd, const char* node, int interface)
 		{
 		/* Node address converted successfully. */
 		rc = setsockopt(fd, IPPROTO_IPV6, IPV6_ADD_MEMBERSHIP, &req, sizeof(req));
+		}
+	return rc;
+	}
+
+/* mcast4_drop_membership: Remove socket from IPv4 multicast group.
+ * returns: same as mcast4_add_membership.
+ */
+int
+mcast4_drop_membership(int fd, const char* node, int interface)
+	{
+	int rc = -2;
+#if defined(__linux__)
+	struct ip_mreqn req =
+		{
+		.imr_ifindex = interface,
+		};
+	if (inet_pton(AF_INET, node, &req.imr_multiaddr) == 1)
+		{
+		rc = setsockopt(fd, IPPROTO_IP, IP_DROP_MEMBERSHIP, &req, sizeof(req));
+		}
+#else
+	struct ip_mreq req;
+	if (inet_pton(AF_INET, node, &req.imr_multiaddr) == 1)
+		{
+		req.imr_interface.s_addr = INADDR_ANY;
+		rc = setsockopt(fd, IPPROTO_IP, IP_DROP_MEMBERSHIP, &req, sizeof(req));
+		}
+#endif
+	return rc;
+	}
+
+/* mcast6_drop_membership: Remove socket from IPv6 multicast group.
+ * returns: same as mcast6_add_membership.
+ */
+int
+mcast6_drop_membership(int fd, const char* node, int interface)
+	{
+	int rc = -2;
+	struct ipv6_mreq req =
+		{
+		.ipv6mr_interface = interface,
+		};
+	if (inet_pton(AF_INET6, node, &req.ipv6mr_multiaddr) == 1)
+		{
+		rc = setsockopt(fd, IPPROTO_IPV6, IPV6_DROP_MEMBERSHIP, &req, sizeof(req));
 		}
 	return rc;
 	}
