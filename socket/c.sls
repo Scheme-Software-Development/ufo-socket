@@ -24,10 +24,12 @@
     *sol-socket*
     *so-acceptconn* *so-broadcast* *so-domain* *so-dontroute* *so-error* *so-keepalive* *so-linger* *so-oobinline*
     *so-protocol* *so-reuseaddr* *so-type*
+    *so-rcvbuf* *so-sndbuf* *tcp-nodelay*
 
     *ni-namereqd* *ni-dgram* *ni-nofqdn* *ni-numerichost* *ni-numericserv*
     *ni-maxhost* *ni-maxserv*
     *eagain* *ewouldblock* *eintr*
+    *somaxconn*
     *so-rcvtimeo* *so-sndtimeo*
     *af-unix*
     *sizeof-sockaddr-un*
@@ -42,7 +44,7 @@
     socket-recvfrom/address
     socket-set-timeout!
     make-unix-client-socket make-unix-server-socket
-    socket-recv! socket-set-nonblocking!
+    socket-recv! socket-set-nonblocking! socket-nonblocking?
     )
   (import
    (chezscheme)
@@ -74,12 +76,17 @@
   (define connect-server-socket
     (case-lambda
       [(node service family socktype flags protocol)
-       (connect-server-socket node service family socktype flags protocol (create-socket-reuseaddr))]
+       (connect-server-socket node service family socktype flags protocol (create-socket-reuseaddr) *somaxconn*)]
       [(node service family socktype flags protocol reuse-addr?)
+       (connect-server-socket node service family socktype flags protocol reuse-addr? *somaxconn*)]
+      [(node service family socktype flags protocol reuse-addr? backlog)
        (let ([sock (connect-socket node service family socktype flags protocol bind reuse-addr?)])
          ;; TCP sockets (streams) also need to be listened to.
          (when (and sock (= (socket-get-int sock *sol-socket* *so-type*) *sock-stream*))
-           (listen (socket-file-descriptor sock) *somaxconn*))
+           (let-values ([(rc errno) (call-procedure/errno listen (socket-file-descriptor sock) backlog)])
+             (when (fx=? rc -1)
+               (socket-close sock)
+               (raise-socket-error 'connect-server-socket errno "~a" (strerror errno)))))
          sock)]))
 
   (define connect-client-socket
@@ -125,16 +132,32 @@
   (define socket-recv!
     (case-lambda
       [(sock buf)
-       (socket-recv! sock buf 0)]
+       (socket-recv! sock buf 0 (bytevector-length buf) 0)]
       [(sock buf flags)
-       (let-values ([(rc errno) (call-procedure/errno recv (socket-file-descriptor sock) buf (bytevector-length buf) flags)])
-         (cond
-           [(fx>? rc 0) rc]
-           [(fx=? rc 0) 0]
-           [(or (fx=? errno *eagain*) (fx=? errno *ewouldblock*) (fx=? errno *eintr*))
-            #f]
-           [else
-             (raise-socket-error 'socket-recv! errno "~a" (strerror errno))]))]))
+       (socket-recv! sock buf 0 (bytevector-length buf) flags)]
+      [(sock buf start count)
+       (socket-recv! sock buf start count 0)]
+      [(sock buf start count flags)
+       (if (fx=? start 0)
+           (let-values ([(rc errno) (call-procedure/errno recv (socket-file-descriptor sock) buf count flags)])
+             (cond
+               [(fx>? rc 0) rc]
+               [(fx=? rc 0) 0]
+               [(or (fx=? errno *eagain*) (fx=? errno *ewouldblock*) (fx=? errno *eintr*))
+                #f]
+               [else
+                (raise-socket-error 'socket-recv! errno "~a" (strerror errno))]))
+           (let ([tmp (make-bytevector count)])
+             (let-values ([(rc errno) (call-procedure/errno recv (socket-file-descriptor sock) tmp count flags)])
+               (cond
+                 [(fx>? rc 0)
+                  (bytevector-copy! tmp 0 buf start rc)
+                  rc]
+                 [(fx=? rc 0) 0]
+                 [(or (fx=? errno *eagain*) (fx=? errno *ewouldblock*) (fx=? errno *eintr*))
+                  #f]
+                 [else
+                  (raise-socket-error 'socket-recv! errno "~a" (strerror errno))]))))]))
 
   ;; [proc] socket-recvfrom: recv data and sender info.
   ;; [return] (cons data-u8-bytevector sockaddr-u8-bytevector)
@@ -190,7 +213,9 @@
 
   (define socket-shutdown
     (lambda (sock how)
-      (shutdown (socket-file-descriptor sock) how)))
+      (let-values ([(rc errno) (call-procedure/errno shutdown (socket-file-descriptor sock) how)])
+        (when (fx=? rc -1)
+          (raise-socket-error 'socket-shutdown errno "~a" (strerror errno))))))
 
   (define socket-get-int
     (let ([f (foreign-procedure "getsockopt" (int int int (* int) (* int)) int)])
@@ -316,9 +341,11 @@
       [(sock flags)
        (alloc ([salen &salen socklen-t])
          (ftype-set! socklen-t () &salen *s-sizeof-sockaddr*)
-         (let* ([saddr (make-bytevector *s-sizeof-sockaddr*)]
-                [rc (getpeername (socket-file-descriptor sock) saddr &salen)])
-           (getnameinfo/bv (bytevector-slice saddr (ftype-ref socklen-t () &salen)) flags)))]))
+         (let ([saddr (make-bytevector *s-sizeof-sockaddr*)])
+           (let-values ([(rc errno) (call-procedure/errno getpeername (socket-file-descriptor sock) saddr &salen)])
+             (if (fx=? rc 0)
+                 (getnameinfo/bv (bytevector-slice saddr (ftype-ref socklen-t () &salen)) flags)
+                 (raise-socket-error 'socket-peerinfo errno "~a" (strerror errno))))))]))
 
   (define socket-recvfrom/address
     (case-lambda
@@ -361,14 +388,32 @@
            [else
              #f]))]))
 
+  (define (timeout->sec-usec t)
+    (cond
+      [(not t) (values -1 0)]
+      [(integer? t) (values t 0)]
+      [else
+       (let* ([sec (exact (truncate t))]
+              [usec (exact (round (* (- t sec) 1000000)))])
+         (if (fx>=? usec 1000000)
+             (values (fx+ sec 1) 0)
+             (values sec usec)))]))
+
   (define socket-set-timeout!
-    (lambda (sock recv-sec send-sec)
-      (let-values ([(rc errno) (call-procedure/errno socket-set-timeout
-                                  (socket-file-descriptor sock)
-                                  (if recv-sec recv-sec -1) 0
-                                  (if send-sec send-sec -1) 0)])
-        (when (fx=? rc -1)
-          (raise-socket-error 'socket-set-timeout! errno "~a" (strerror errno))))))
+    (case-lambda
+      [(sock recv-timeout send-timeout)
+       (let-values ([(rs rus) (timeout->sec-usec recv-timeout)]
+                    [(ss sus) (timeout->sec-usec send-timeout)])
+         (socket-set-timeout! sock rs ss rus sus))]
+      [(sock recv-sec send-sec recv-usec send-usec)
+       (let-values ([(rc errno) (call-procedure/errno socket-set-timeout
+                                   (socket-file-descriptor sock)
+                                   (if recv-sec recv-sec -1)
+                                   (if recv-usec recv-usec 0)
+                                   (if send-sec send-sec -1)
+                                   (if send-usec send-usec 0))])
+         (when (fx=? rc -1)
+           (raise-socket-error 'socket-set-timeout! errno "~a" (strerror errno))))]))
 
   (define socket-set-nonblocking!
     (lambda (sock nonblocking)
@@ -378,11 +423,19 @@
         (when (fx=? rc -1)
           (raise-socket-error 'socket-set-nonblocking! errno "~a" (strerror errno))))))
 
+  (define socket-nonblocking?
+    (lambda (sock)
+      (let-values ([(rc errno) (call-procedure/errno socket-get-nonblocking (socket-file-descriptor sock))])
+        (cond
+          [(fx=? rc -1)
+           (raise-socket-error 'socket-nonblocking? errno "~a" (strerror errno))]
+          [else (fx=? rc 1)]))))
+
   (define make-unix-client-socket
     (lambda (path)
-      (let ([sockfd (socket *af-unix* *sock-stream* 0)])
+      (let-values ([(sockfd errno) (call-procedure/errno socket *af-unix* *sock-stream* 0)])
         (when (fx=? sockfd -1)
-          (raise-socket-error 'make-unix-client-socket ((get-errno-proc)) "socket creation failed"))
+          (raise-socket-error 'make-unix-client-socket errno "~a" (strerror errno)))
         (let ([addr (make-sockaddr-un path)])
           (when (eqv? addr 0)
             (close sockfd)
@@ -397,9 +450,9 @@
 
   (define make-unix-server-socket
     (lambda (path)
-      (let ([sockfd (socket *af-unix* *sock-stream* 0)])
+      (let-values ([(sockfd errno) (call-procedure/errno socket *af-unix* *sock-stream* 0)])
         (when (fx=? sockfd -1)
-          (raise-socket-error 'make-unix-server-socket ((get-errno-proc)) "socket creation failed"))
+          (raise-socket-error 'make-unix-server-socket errno "~a" (strerror errno)))
         (socket-set-int! sockfd *sol-socket* *so-reuseaddr* 1)
         (let ([addr (make-sockaddr-un path)])
           (when (eqv? addr 0)
@@ -408,9 +461,12 @@
           (let-values ([(rc errno) (call-procedure/errno bind sockfd addr *sizeof-sockaddr-un*)])
             (foreign-free addr)
             (if (fx=? rc 0)
-                (begin
-                  (listen sockfd *somaxconn*)
-                  (make-socket sockfd))
+                (let-values ([(lrc lerrno) (call-procedure/errno listen sockfd *somaxconn*)])
+                  (if (fx=? lrc 0)
+                      (make-socket sockfd)
+                      (begin
+                        (close sockfd)
+                        (raise-socket-error 'make-unix-server-socket lerrno "~a" (strerror lerrno)))))
                 (begin
                   (close sockfd)
                   (raise-socket-error 'make-unix-server-socket errno "~a" (strerror errno)))))))))

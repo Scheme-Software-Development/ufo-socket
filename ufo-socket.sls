@@ -5,8 +5,7 @@
 ;; Written by Jerry 2020-2021.
 ;; SPDX-License-Identifier: Unlicense
 ;;
-;; TODOs
-;; - AF_UNIX support
+;; Extensions & ideas
 ;; ? Numeric IPv4 & IPv6 address builders? eg,
 ;;   - (ipv4/any) => INADDR_ANY
 ;;   - (ipv6/any) => IN6ADDR_ANY_INIT
@@ -69,6 +68,7 @@
     *sol-socket*
     *so-acceptconn* *so-broadcast* *so-domain* *so-dontroute* *so-error*
     *so-keepalive* *so-linger* *so-oobinline* *so-protocol* *so-reuseaddr* *so-type*
+    *so-rcvbuf* *so-sndbuf* *tcp-nodelay*
     *ip-multicast-loop* *ip-multicast-ttl* *ip-multicast-if*
     *ip-add-membership* *ip-drop-membership*
     socket-get-int socket-set-int!
@@ -81,7 +81,7 @@
     mcast-add-membership mcast-drop-membership
 
     ;;; Timeouts & non-blocking
-    socket-set-timeout! socket-set-nonblocking!
+    socket-set-timeout! socket-set-nonblocking! socket-nonblocking?
     *so-rcvtimeo* *so-sndtimeo*
 
     ;;; Unix domain sockets
@@ -142,6 +142,11 @@
     [multicast-if	*ip-multicast-if*]	; Set local interface for multicast socket.
     [add-membership	*ip-add-membership*]	; Join a multicast group.
     [drop-membership	*ip-drop-membership*]	; Leave a multicast group.
+    [rcvbuf		*so-rcvbuf*]		; int: receive buffer size.
+    [sndbuf		*so-sndbuf*]		; int: send buffer size.
+    [nodelay		*tcp-nodelay*]		; bool IPPROTO_TCP: disable Nagle.
+    [rcvtimeo		*so-rcvtimeo*]		; struct timeval.
+    [sndtimeo		*so-sndtimeo*]		; struct timeval.
     )
 
   ;; [proc] socket->port: shortcut for creating a transcoded text port from a binary socket

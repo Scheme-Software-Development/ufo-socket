@@ -85,9 +85,10 @@
           (socket-close cli)
           (socket-close srv))))))
 
-;;; socket-set-timeout! test (indirect: verify it doesn't raise)
+;;; socket-set-timeout! test (integer + float seconds)
 (let ([srv (make-server-socket "15002")])
-  (socket-set-timeout! srv 2 2)
+  (socket-set-timeout! srv 2 2)       ; integer seconds
+  (socket-set-timeout! srv 1.5 0.5)   ; float seconds -> 1s500000us / 0s500000us
   (socket-close srv)
   (assert-equal 'set-timeout! 'ok 'ok))
 
@@ -107,6 +108,111 @@
   (socket-set-nonblocking! srv #t)
   (let ([data (socket-recv srv 100)])
     (assert-equal 'nonblocking-recv #f data))
+  (socket-close srv))
+
+;;; socket-get-int / socket-set-int! test (SO_REUSEADDR round-trip)
+(let ([srv (make-server-socket "15005")])
+  ;; default reuse-addr may be 0 or 1; set it to 1 explicitly
+  (socket-set-int! srv *sol-socket* *so-reuseaddr* 1)
+  (assert-equal 'socket-get-int-reuseaddr 1 (socket-get-int srv *sol-socket* *so-reuseaddr*))
+  (socket-set-int! srv *sol-socket* *so-reuseaddr* 0)
+  (assert-equal 'socket-get-int-reuseaddr-off 0 (socket-get-int srv *sol-socket* *so-reuseaddr*))
+  (socket-close srv))
+
+;;; nonblocking socket-accept returns #f when no pending connection
+(let ([srv (make-server-socket "15006")])
+  (socket-set-nonblocking! srv #t)
+  (let ([conn (socket-accept srv)])
+    (assert-equal 'nonblocking-accept-no-conn #f conn))
+  (socket-close srv))
+
+;;; socket-set-timeout! microsecond precision test
+(let ([srv (make-server-socket "15007")])
+  (socket-set-timeout! srv 1 1 500000 500000)
+  (socket-close srv)
+  (assert-equal 'set-timeout-usec 'ok 'ok))
+
+;;; make-server-socket with custom backlog
+(let ([srv (make-server-socket "15008" *af-inet* *sock-stream* *ipproto-ip* #f 5)])
+  (socket-close srv)
+  (assert-equal 'make-server-socket-backlog 'ok 'ok))
+
+;;; socket options: SO_RCVBUF / SO_SNDBUF
+;; Linux doubles the user value for sk_buff overhead, so we only verify
+;; the value is >= what we asked for and that get/set don't raise.
+(let ([srv (make-server-socket "15009")])
+  (socket-set-int! srv *sol-socket* *so-rcvbuf* 8192)
+  (let ([rcv (socket-get-int srv *sol-socket* *so-rcvbuf*)])
+    (if (>= rcv 8192)
+        (begin (set! pass-count (+ pass-count 1)) (display "PASS socket-option-rcvbuf")(newline))
+        (begin (set! fail-count (+ fail-count 1)) (display "FAIL socket-option-rcvbuf: expected >= 8192, got ")(display rcv)(newline))))
+  (socket-set-int! srv *sol-socket* *so-sndbuf* 8192)
+  (let ([snd (socket-get-int srv *sol-socket* *so-sndbuf*)])
+    (if (>= snd 8192)
+        (begin (set! pass-count (+ pass-count 1)) (display "PASS socket-option-sndbuf")(newline))
+        (begin (set! fail-count (+ fail-count 1)) (display "FAIL socket-option-sndbuf: expected >= 8192, got ")(display snd)(newline))))
+  (socket-close srv))
+
+;;; TCP_NODELAY round-trip
+(let ([srv (make-server-socket "15010")])
+  (socket-set-int! srv *ipproto-tcp* *tcp-nodelay* 1)
+  (assert-equal 'socket-option-nodelay 1 (socket-get-int srv *ipproto-tcp* *tcp-nodelay*))
+  (socket-set-int! srv *ipproto-tcp* *tcp-nodelay* 0)
+  (assert-equal 'socket-option-nodelay-off 0 (socket-get-int srv *ipproto-tcp* *tcp-nodelay*))
+  (socket-close srv))
+
+;;; socket-shutdown test
+(let ([srv (make-server-socket "15015")])
+  (let ([cli (make-client-socket "127.0.0.1" "15015")])
+    (let ([conn (socket-accept srv)])
+      (socket-send cli (string->utf8 "hello"))
+      (let ([data (socket-recv conn 100)])
+        (assert-equal 'shutdown-recv "hello" (utf8->string data)))
+      ;; shutdown the accepted connection for writing
+      (socket-shutdown conn *shut-wr*)
+      ;; client should see EOF (0 bytes) on next recv
+      (let ([eof-data (socket-recv cli 100)])
+        (assert-equal 'shutdown-eof 0 eof-data))
+      (socket-close conn)
+      (socket-close cli)
+      (socket-close srv))))
+
+;;; socket-peerinfo test
+(let ([srv (make-server-socket "15016")])
+  (let ([cli (make-client-socket "127.0.0.1" "15016")])
+    (let ([conn (socket-accept srv)])
+      (let-values ([(host service) (socket-peerinfo conn)])
+        ;; getnameinfo may return "localhost" or "127.0.0.1" depending on /etc/hosts
+        (if (or (string=? host "localhost") (string=? host "127.0.0.1"))
+            (assert-equal 'peerinfo-host host host)
+            (begin
+              (set! fail-count (+ fail-count 1))
+              (display "FAIL peerinfo-host: unexpected host ")(display host)(newline))))
+      (socket-close conn)
+      (socket-close cli)
+      (socket-close srv))))
+
+;;; socket-recv! start/count test
+(let ([srv (connect-server-socket #f "15017" *af-inet* *sock-dgram* 0 *ipproto-udp*)])
+  (let ([cli (connect-client-socket "127.0.0.1" "15017" *af-inet* *sock-dgram* 0 *ipproto-udp*)])
+    (socket-send cli (string->utf8 "hello"))
+    (let ([buf (make-bytevector 10 0)])
+      (let ([n (socket-recv! srv buf 2 5)])
+        (assert-equal 'socket-recv!-start-len 5 n)
+        (assert-equal 'socket-recv!-start-b2 104 (bytevector-u8-ref buf 2))
+        (assert-equal 'socket-recv!-start-b3 101 (bytevector-u8-ref buf 3))
+        (assert-equal 'socket-recv!-start-b6 111 (bytevector-u8-ref buf 6))
+        (assert-equal 'socket-recv!-start-b7 0 (bytevector-u8-ref buf 7))))
+    (socket-close cli)
+    (socket-close srv)))
+
+;;; socket-nonblocking? test
+(let ([srv (make-server-socket "15018")])
+  (assert-equal 'nonblocking-initial #f (socket-nonblocking? srv))
+  (socket-set-nonblocking! srv #t)
+  (assert-equal 'nonblocking-after-set #t (socket-nonblocking? srv))
+  (socket-set-nonblocking! srv #f)
+  (assert-equal 'nonblocking-after-clear #f (socket-nonblocking? srv))
   (socket-close srv))
 
 ;;; Summary

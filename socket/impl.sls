@@ -89,9 +89,11 @@
       [(service ai-family ai-socktype)
        (make-server-socket service ai-family ai-socktype *ipproto-ip*)]
       [(service ai-family ai-socktype ai-protocol)
-       (make-server-socket service ai-family ai-socktype ai-protocol #f)]
+       (make-server-socket service ai-family ai-socktype ai-protocol #f *somaxconn*)]
       [(service ai-family ai-socktype ai-protocol reuse-addr?)
-       (connect-server-socket #f service ai-family ai-socktype (bitwise-ior *ai-v4mapped* *ai-addrconfig*) ai-protocol reuse-addr?)]))
+       (make-server-socket service ai-family ai-socktype ai-protocol reuse-addr? *somaxconn*)]
+      [(service ai-family ai-socktype ai-protocol reuse-addr? backlog)
+       (connect-server-socket #f service ai-family ai-socktype (bitwise-ior *ai-v4mapped* *ai-addrconfig*) ai-protocol reuse-addr? backlog)]))
 
   ;; call-with-socket is adapted from the call-with-port example found here:
   ;; https://scheme.com/tspl4/control.html#defn:call-with-port

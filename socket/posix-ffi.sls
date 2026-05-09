@@ -16,6 +16,8 @@
     *sol-socket*
     *so-acceptconn* *so-broadcast* *so-domain* *so-dontroute* *so-error* *so-keepalive* *so-linger* *so-oobinline*
     *so-protocol* *so-reuseaddr* *so-type*
+    *so-rcvbuf* *so-sndbuf*
+    *tcp-nodelay*
     *ip-multicast-loop* *ip-multicast-ttl* *ip-multicast-if*
     *ip-add-membership* *ip-drop-membership*
     *ni-namereqd* *ni-dgram* *ni-nofqdn* *ni-numerichost* *ni-numericserv*
@@ -38,7 +40,7 @@
     mcast4-add-membership mcast6-add-membership
     mcast4-drop-membership mcast6-drop-membership
     socket-set-timeout make-sockaddr-un
-    socket-set-nonblocking
+    socket-set-nonblocking socket-get-nonblocking
 
     ;; Socket record type
     sockobj make-socket socket? socket-file-descriptor)
@@ -90,6 +92,7 @@
     *sol-socket*
     *so-acceptconn* *so-broadcast* *so-domain* *so-dontroute* *so-error* *so-keepalive* *so-linger* *so-oobinline*
     *so-protocol* *so-reuseaddr* *so-type*
+    *so-rcvbuf* *so-sndbuf*
     *ip-multicast-loop* *ip-multicast-ttl* *ip-multicast-if*
     *ip-add-membership* *ip-drop-membership*
     *ni-namereqd* *ni-dgram* *ni-nofqdn* *ni-numerichost* *ni-numericserv*
@@ -98,7 +101,8 @@
     *eagain* *ewouldblock* *eintr*
     *so-rcvtimeo* *so-sndtimeo*
     *af-unix*
-    *sizeof-sockaddr-un*)
+    *sizeof-sockaddr-un*
+    *tcp-nodelay*)
 
   (define-ftype addrinfo* void*)
   (define-ftype sockaddr* void*)
@@ -147,7 +151,8 @@
     [mcast6-drop-membership (int string int) int]
     [socket-set-timeout (int long long long long) int]
     [make-sockaddr-un (string) void*]
-    [socket-set-nonblocking (int int) int])
+    [socket-set-nonblocking (int int) int]
+    [socket-get-nonblocking (int) int])
 
   ;; The socket record type.
   (define-record-type (sockobj make-socket socket?)

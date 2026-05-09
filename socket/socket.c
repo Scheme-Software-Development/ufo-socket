@@ -14,6 +14,7 @@
 #include <sys/un.h>
 #include <netinet/in.h>
 #include <netinet/ip.h>
+#include <netinet/tcp.h>
 #include <netdb.h>
 #include <arpa/inet.h>	// inet_pton
 #include <errno.h>
@@ -75,6 +76,9 @@ C_CONST_INT(SO_OOBINLINE);	/* bool */
 C_CONST_INT(SO_PROTOCOL);	/* int read-only: eg, IPPROTO_TCP */
 C_CONST_INT(SO_REUSEADDR);	/* bool */
 C_CONST_INT(SO_TYPE);		/* int read-only: eg, SOCK_STREAM */
+C_CONST_INT(SO_RCVBUF);		/* int */
+C_CONST_INT(SO_SNDBUF);		/* int */
+C_CONST_INT(TCP_NODELAY);		/* bool: IPPROTO_TCP level */
 
 const int c_S_SIZEOF_SOCKADDR = sizeof(struct sockaddr_storage);
 
@@ -166,6 +170,18 @@ socket_set_nonblocking(int fd, int nonblocking)
 		return -1;
 	flags = nonblocking ? (flags | O_NONBLOCK) : (flags & ~O_NONBLOCK);
 	return fcntl(fd, F_SETFL, flags);
+	}
+
+/* socket_get_nonblocking: query O_NONBLOCK status.
+ * returns: 1 if nonblocking, 0 if blocking, -1 on error (errno set).
+ */
+int
+socket_get_nonblocking(int fd)
+	{
+	int flags = fcntl(fd, F_GETFL, 0);
+	if (flags < 0)
+		return -1;
+	return (flags & O_NONBLOCK) ? 1 : 0;
 	}
 
 /* See getaddrinfo(2) for a full C client/server example. */
