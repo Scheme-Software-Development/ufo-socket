@@ -180,3 +180,49 @@ mv socket/*.so ../../../socket/
 cd ../../..
 bash .akku/env
 ```
+
+## API Changes
+
+### Breaking changes
+
+- **`getnameinfo`** previously returned a `cons` pair `(host . service)`. It now returns `(values host service)`.
+  ```scheme
+  ;; old
+  (let ([result (getnameinfo addr)])
+    (car result)   ; host
+    (cdr result))  ; service
+  ;; new
+  (let-values ([(host service) (getnameinfo addr)])
+    ...)
+  ```
+
+### Semantic changes
+
+- **`socket-accept`**: on non-blocking sockets, returns `#f` when no connection is pending (EAGAIN/EWOULDBLOCK/EINTR) instead of raising an exception.
+- **`socket-recv`**: on non-blocking sockets, returns `#f` on EAGAIN/EWOULDBLOCK/EINTR instead of raising an exception. Returns `0` for EOF.
+- **`socket-send`**: on non-blocking sockets, returns `#f` on EAGAIN/EWOULDBLOCK/EINTR instead of raising an exception.
+
+### Backward-compatible improvements
+
+- **`socket-send`** now supports non-zero `start` offsets.
+- **`make-server-socket`** accepts an optional `reuse-addr?` argument at the end.
+- **`connect-server-socket`** and **`connect-client-socket`** accept an optional `reuse-addr?` argument.
+
+### New APIs
+
+| Procedure | Description |
+|---|---|
+| `socket-recvfrom/address` | UDP `recvfrom` that returns `(values data host service)` |
+| `socket-set-timeout!` | Sets `SO_RCVTIMEO` / `SO_SNDTIMEO` in seconds |
+| `make-unix-client-socket` | Create an `AF_UNIX` client socket |
+| `make-unix-server-socket` | Create an `AF_UNIX` listening socket |
+| `getaddrinfo*` | Resolve host/service to a list of addrinfo records |
+| `socket-error?` | Predicate for the new structured exception type |
+| `socket-error-who` / `-errno` / `-message` | Accessors for `socket-error` |
+
+### New constants
+
+- `*eagain*` `*ewouldblock*` `*eintr*` — for non-blocking error handling
+- `*so-rcvtimeo*` `*so-sndtimeo*` — for timeout control
+- `*af-unix*` — Unix domain socket address family
+- `*ip-add-membership*` `*ip-drop-membership*` — multicast options
