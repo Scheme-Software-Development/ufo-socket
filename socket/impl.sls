@@ -107,15 +107,9 @@
   (define socket-port-reader
     (lambda (socket)
       (lambda (bytevector-dest start n)
-        (let ([in (socket-recv socket n)])
-          (cond
-            [(bytevector? in)
-              (let ([in-length (bytevector-length in)])
-                (bytevector-copy! in 0 bytevector-dest start in-length)
-                in-length)]
-            [else
-              ;; 'in' is 0 (representing EOF) as per the custom port r! protocol.
-              in])))))
+        ;; socket-recv! now uses recv-offset, so this is zero-allocation
+        ;; even when start is non-zero.
+        (socket-recv! socket bytevector-dest start n))))
 
   (define socket-port-writer
     (lambda (socket)

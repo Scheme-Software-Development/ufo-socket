@@ -184,6 +184,45 @@ socket_get_nonblocking(int fd)
 	return (flags & O_NONBLOCK) ? 1 : 0;
 	}
 
+/* recv_offset / send_offset: recv/send into/from a bytevector at an offset.
+ * These exist because Chez Scheme's FFI cannot express a bytevector pointer
+ * plus an arbitrary offset, so without these helpers we must allocate a
+ * temporary buffer and copy.
+ */
+ssize_t
+recv_offset(int fd, void* buf, size_t offset, size_t len, int flags)
+	{
+	return recv(fd, (char*)buf + offset, len, flags);
+	}
+
+ssize_t
+send_offset(int fd, const void* buf, size_t offset, size_t len, int flags)
+	{
+	return send(fd, (char*)buf + offset, len, flags);
+	}
+
+/* socket_get_linger / socket_set_linger: helpers for SO_LINGER struct.
+ * SO_LINGER cannot be read/written with the simple int-based socket-get-int.
+ */
+int
+socket_get_linger(int fd, int* enabled, int* seconds)
+	{
+	struct linger l;
+	socklen_t len = sizeof(l);
+	if (getsockopt(fd, SOL_SOCKET, SO_LINGER, &l, &len) != 0)
+		return -1;
+	*enabled = l.l_onoff;
+	*seconds = l.l_linger;
+	return 0;
+	}
+
+int
+socket_set_linger(int fd, int enabled, int seconds)
+	{
+	struct linger l = { enabled, seconds };
+	return setsockopt(fd, SOL_SOCKET, SO_LINGER, &l, sizeof(l));
+	}
+
 /* See getaddrinfo(2) for a full C client/server example. */
 
 /* addrinfo accessors. */

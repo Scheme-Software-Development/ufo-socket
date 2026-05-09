@@ -41,6 +41,7 @@
     mcast4-drop-membership mcast6-drop-membership
     socket-set-timeout make-sockaddr-un
     socket-set-nonblocking socket-get-nonblocking
+    recv-offset send-offset
 
     ;; Socket record type
     sockobj make-socket socket? socket-file-descriptor)
@@ -152,7 +153,10 @@
     [socket-set-timeout (int long long long long) int]
     [make-sockaddr-un (string) void*]
     [socket-set-nonblocking (int int) int]
-    [socket-get-nonblocking (int) int])
+    [socket-get-nonblocking (int) int]
+    [recv-offset (int u8* size_t size_t int) ssize_t]
+    [send-offset (int u8* size_t size_t int) ssize_t]
+)
 
   ;; The socket record type.
   (define-record-type (sockobj make-socket socket?)

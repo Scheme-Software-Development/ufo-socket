@@ -262,6 +262,66 @@
       (socket-close cli)
       (socket-close srv))))
 
+;;; socket-recvfrom with MSG_PEEK flag
+(let ([srv (connect-server-socket #f "15023" *af-inet* *sock-dgram* 0 *ipproto-udp*)])
+  (let ([cli (connect-client-socket "127.0.0.1" "15023" *af-inet* *sock-dgram* 0 *ipproto-udp*)])
+    (socket-send cli (string->utf8 "from-peek"))
+    (let ([result1 (socket-recvfrom srv 100 *msg-peek*)])
+      (assert-equal 'recvfrom-peek (pair? result1) #t)
+      (let ([result2 (socket-recvfrom srv 100)])
+        (assert-equal 'recvfrom-after-peek (pair? result2) #t)))
+    (socket-close cli)
+    (socket-close srv)))
+
+;;; socket->port test
+(let ([srv (make-server-socket "15024")])
+  (let ([cli (make-client-socket "127.0.0.1" "15024")])
+    (let ([conn (socket-accept srv)])
+      (let ([out (socket->port cli)])
+        (display "hello\n" out)
+        (flush-output-port out))
+      (let ([in (socket->port conn)])
+        (let ([line (get-line in)])
+          (assert-equal 'socket->port "hello" line))
+        (close-port in))
+      (socket-close conn)
+      (socket-close cli)
+      (socket-close srv))))
+
+;;; socket-merge-flags / socket-purge-flags test
+(let ([merged (socket-merge-flags *ai-v4mapped* *ai-addrconfig*)])
+  (let ([purged (socket-purge-flags merged *ai-addrconfig*)])
+    (assert-equal 'socket-merge-purge *ai-v4mapped* purged)))
+
+;;; gethostname test
+(let ([host (gethostname)])
+  (if (string? host)
+      (assert-equal 'gethostname host host)
+      (begin
+        (set! fail-count (+ fail-count 1))
+        (display "FAIL gethostname: not a string")(newline))))
+
+;;; getaddrinfo* test
+(let ([results (getaddrinfo* "127.0.0.1" "http")])
+  (if (pair? results)
+      (assert-equal 'getaddrinfo*-nonempty 'ok 'ok)
+      (begin
+        (set! fail-count (+ fail-count 1))
+        (display "FAIL getaddrinfo*: empty results")(newline))))
+
+;;; SO_LINGER round-trip
+(let ([srv (make-server-socket "15025")])
+  (socket-set-linger! srv #t 5)
+  (let-values ([(enabled seconds) (socket-get-linger srv)])
+    (assert-equal 'linger-enabled #t enabled)
+    (assert-equal 'linger-seconds 5 seconds))
+  (socket-close srv))
+
+;;; socket-get-error test (no pending error on fresh socket)
+(let ([srv (make-server-socket "15026")])
+  (assert-equal 'socket-get-error 0 (socket-get-error srv))
+  (socket-close srv))
+
 ;;; Summary
 (display "=== ")(display pass-count)(display " passed, ")(display fail-count)(display " failed ===")(newline)
 (if (> fail-count 0) (exit 1) (exit 0))

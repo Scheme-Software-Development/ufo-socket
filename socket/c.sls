@@ -46,6 +46,8 @@
     make-unix-client-socket make-unix-server-socket
     socket-recv! socket-set-nonblocking! socket-nonblocking?
     socket-send-all
+    socket-get-linger socket-set-linger!
+    socket-get-error
     )
   (import
    (chezscheme)
@@ -148,16 +150,13 @@
                [(errno-nonblocking? errno) #f]
                [else
                 (raise-socket-error 'socket-recv! errno "~a" (strerror errno))]))
-           (let ([tmp (make-bytevector count)])
-             (let-values ([(rc errno) (call-procedure/errno recv (socket-file-descriptor sock) tmp count flags)])
-               (cond
-                 [(fx>? rc 0)
-                  (bytevector-copy! tmp 0 buf start rc)
-                  rc]
-                 [(fx=? rc 0) 0]
-                 [(errno-nonblocking? errno) #f]
-                 [else
-                  (raise-socket-error 'socket-recv! errno "~a" (strerror errno))]))))]))
+           (let-values ([(rc errno) (call-procedure/errno recv-offset (socket-file-descriptor sock) buf start count flags)])
+             (cond
+               [(fx>? rc 0) rc]
+               [(fx=? rc 0) 0]
+               [(errno-nonblocking? errno) #f]
+               [else
+                (raise-socket-error 'socket-recv! errno "~a" (strerror errno))])))]))
 
   ;; [proc] socket-recvfrom: recv data and sender info.
   ;; [return] (cons data-u8-bytevector sockaddr-u8-bytevector)
@@ -192,18 +191,13 @@
       [(sock bv start n)
        (socket-send sock bv start n 0)]
       [(sock bv start n flags)
-       (let ([data (if (fx=? start 0)
-                       bv
-                       (let ([sub (make-bytevector n)])
-                         (bytevector-copy! bv start sub 0 n)
-                         sub))])
-         (let-values ([(rc errno) (call-procedure/errno send (socket-file-descriptor sock) data n flags)])
-           (cond
-             [(fx>=? rc 0)
-              rc]
-             [(errno-nonblocking? errno) #f]
-             [else
-               (raise-socket-error 'socket-send errno "~a" (strerror errno))])))]))
+       (let-values ([(rc errno) (call-procedure/errno send-offset (socket-file-descriptor sock) bv start n flags)])
+         (cond
+           [(fx>=? rc 0)
+            rc]
+           [(errno-nonblocking? errno) #f]
+           [else
+            (raise-socket-error 'socket-send errno "~a" (strerror errno))]))]))
 
   (define socket-send-all
     (case-lambda
@@ -261,6 +255,30 @@
                (raise-socket-error 'socket-set-int! errno "~a" (strerror errno))]
               [else
                 rc]))))))
+
+  (define socket-get-linger
+    (let ([f (foreign-procedure "socket_get_linger" (int (* int) (* int)) int)])
+      (lambda (sock)
+        (alloc ([enabled &enabled int]
+                [seconds &seconds int])
+          (let-values ([(rc errno) (call-procedure/errno f (socket-file-descriptor sock) &enabled &seconds)])
+            (cond
+              [(fx=? rc -1)
+               (raise-socket-error 'socket-get-linger errno "~a" (strerror errno))]
+              [else
+               (values (fx=? (ftype-ref int () &enabled 0) 1)
+                       (ftype-ref int () &seconds 0))]))))))
+
+  (define socket-set-linger!
+    (let ([f (foreign-procedure "socket_set_linger" (int int int) int)])
+      (lambda (sock enabled seconds)
+        (let-values ([(rc errno) (call-procedure/errno f (socket-file-descriptor sock) (if enabled 1 0) seconds)])
+          (when (fx=? rc -1)
+            (raise-socket-error 'socket-set-linger! errno "~a" (strerror errno)))))))
+
+  (define socket-get-error
+    (lambda (sock)
+      (socket-get-int sock *sol-socket* *so-error*)))
 
   ;; Largely follows the example from getaddrinfo(2).
   (define connect-socket

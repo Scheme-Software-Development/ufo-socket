@@ -83,6 +83,8 @@
     ;;; Timeouts & non-blocking
     socket-set-timeout! socket-set-nonblocking! socket-nonblocking?
     socket-send-all
+    socket-get-linger socket-set-linger!
+    socket-get-error
     *so-rcvtimeo* *so-sndtimeo*
 
     ;;; Unix domain sockets
@@ -148,6 +150,7 @@
     [nodelay		*tcp-nodelay*]		; bool IPPROTO_TCP: disable Nagle.
     [rcvtimeo		*so-rcvtimeo*]		; struct timeval.
     [sndtimeo		*so-sndtimeo*]		; struct timeval.
+    [linger		*so-linger*]		; struct linger.
     )
 
   ;; [proc] socket->port: shortcut for creating a transcoded text port from a binary socket
