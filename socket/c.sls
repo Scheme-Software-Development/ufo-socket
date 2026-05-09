@@ -45,6 +45,7 @@
     socket-set-timeout!
     make-unix-client-socket make-unix-server-socket
     socket-recv! socket-set-nonblocking! socket-nonblocking?
+    socket-send-all
     )
   (import
    (chezscheme)
@@ -96,13 +97,15 @@
       [(node service family socktype flags protocol reuse-addr?)
        (connect-socket node service family socktype flags protocol connect reuse-addr?)]))
 
+  (define (errno-nonblocking? errno)
+    (or (fx=? errno *eagain*) (fx=? errno *ewouldblock*) (fx=? errno *eintr*)))
+
   (define socket-accept
     (lambda (sock)
       (let-values ([(peerfd errno) (call-procedure/errno accept (socket-file-descriptor sock) 0 0)])
         (cond
           [(fx>=? peerfd 0) (make-socket peerfd)]
-          [(or (fx=? errno *eagain*) (fx=? errno *ewouldblock*) (fx=? errno *eintr*))
-           #f]
+          [(errno-nonblocking? errno) #f]
           [else
            (raise-socket-error 'socket-accept errno "~a" (strerror errno))]))))
 
@@ -122,8 +125,7 @@
               (if (fx=? (socket-get-int sock *sol-socket* *so-type*) *sock-dgram*)
                   (bytevector-slice buf 0)
                   0)]
-             [(or (fx=? errno *eagain*) (fx=? errno *ewouldblock*) (fx=? errno *eintr*))
-              #f]
+             [(errno-nonblocking? errno) #f]
              [else
                (raise-socket-error 'socket-recv errno "~a" (strerror errno))])))]))
 
@@ -143,8 +145,7 @@
              (cond
                [(fx>? rc 0) rc]
                [(fx=? rc 0) 0]
-               [(or (fx=? errno *eagain*) (fx=? errno *ewouldblock*) (fx=? errno *eintr*))
-                #f]
+               [(errno-nonblocking? errno) #f]
                [else
                 (raise-socket-error 'socket-recv! errno "~a" (strerror errno))]))
            (let ([tmp (make-bytevector count)])
@@ -154,8 +155,7 @@
                   (bytevector-copy! tmp 0 buf start rc)
                   rc]
                  [(fx=? rc 0) 0]
-                 [(or (fx=? errno *eagain*) (fx=? errno *ewouldblock*) (fx=? errno *eintr*))
-                  #f]
+                 [(errno-nonblocking? errno) #f]
                  [else
                   (raise-socket-error 'socket-recv! errno "~a" (strerror errno))]))))]))
 
@@ -179,8 +179,7 @@
               (if (fx=? (socket-get-int sock *sol-socket* *so-type*) *sock-dgram*)
                   (cons (bytevector-slice buf 0) (bytevector-slice saddr (ftype-ref socklen-t () &salen)))
                   0)]
-             [(or (fx=? errno *eagain*) (fx=? errno *ewouldblock*) (fx=? errno *eintr*))
-              #f]
+             [(errno-nonblocking? errno) #f]
              [else
                (raise-socket-error 'socket-recvfrom errno "~a" (strerror errno))])))]))
 
@@ -202,10 +201,25 @@
            (cond
              [(fx>=? rc 0)
               rc]
-             [(or (fx=? errno *eagain*) (fx=? errno *ewouldblock*) (fx=? errno *eintr*))
-              #f]
+             [(errno-nonblocking? errno) #f]
              [else
                (raise-socket-error 'socket-send errno "~a" (strerror errno))])))]))
+
+  (define socket-send-all
+    (case-lambda
+      [(sock bv)
+       (socket-send-all sock bv 0 (bytevector-length bv))]
+      [(sock bv start count)
+       (let loop ([offset start] [remaining count])
+         (when (fx>? remaining 0)
+           (let ([sent (socket-send sock bv offset remaining)])
+             (cond
+               [(not sent)
+                (raise-socket-error 'socket-send-all *eagain* "socket would block before all data sent")]
+               [(fx>? sent 0)
+                (loop (fx+ offset sent) (fx- remaining sent))]
+               [else
+                (raise-socket-error 'socket-send-all #f "send returned 0 before all data sent")]))))]))
 
   (define socket-close
     (lambda (sock)
@@ -223,7 +237,7 @@
         (alloc ([sz &sz int]
                 [res &res int])
           (ftype-set! int () &sz (ftype-sizeof int))
-          (let-values ([(rc errno) (call-procedure/errno f (socket-file-descriptor sock) level optname &res &sz)])
+          (let-values ([(rc errno) (call-procedure/errno f (if (socket? sock) (socket-file-descriptor sock) sock) level optname &res &sz)])
             (cond
               [(fx=? rc -1)
                (raise-socket-error 'socket-get-int errno "~a" (strerror errno))]

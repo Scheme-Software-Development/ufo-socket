@@ -82,6 +82,7 @@
 
     ;;; Timeouts & non-blocking
     socket-set-timeout! socket-set-nonblocking! socket-nonblocking?
+    socket-send-all
     *so-rcvtimeo* *so-sndtimeo*
 
     ;;; Unix domain sockets

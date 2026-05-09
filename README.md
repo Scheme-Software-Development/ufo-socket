@@ -39,6 +39,25 @@ The created port is input/output.
 [proc] open-socket-input/output-port: creates a binary socket port for both input and output operations.
 ```
 
+### Socket shutdown
+
+```scheme
+(socket-shutdown sock *shut-wr*)   ; disable further sends
+(socket-shutdown sock *shut-rd*)   ; disable further receives
+(socket-shutdown sock *shut-rdwr*) ; disable both
+```
+
+`socket-shutdown` raises `socket-error` on failure (e.g. `ENOTCONN`).
+
+### Peer info
+
+```scheme
+(let-values ([(host service) (socket-peerinfo conn)])
+  ...)
+```
+
+Returns the remote address of a connected socket. Raises `socket-error` if the socket is not connected.
+
 ### Socket options
 
 Some socket options whose values are integers or boolean may also be retrieved and set. For boolean options, use 0 for FALSE, and 1 for TRUE.
@@ -105,7 +124,9 @@ The legacy parameter `create-socket-reuseaddr` still works, but passing an expli
 ### Socket timeouts
 
 ```scheme
-(socket-set-timeout! sock 5 5)   ; 5 second receive and send timeout
+(socket-set-timeout! sock 5 5)       ; 5 second receive and send timeout
+(socket-set-timeout! sock 1.5 0.5)   ; float seconds are auto-split into sec/usec
+(socket-set-timeout! sock 1 1 500000 500000)   ; explicit sec + usec
 ```
 
 ### UDP recvfrom with sender address
@@ -201,11 +222,13 @@ bash .akku/env
 - **`socket-accept`**: on non-blocking sockets, returns `#f` when no connection is pending (EAGAIN/EWOULDBLOCK/EINTR) instead of raising an exception.
 - **`socket-recv`**: on non-blocking sockets, returns `#f` on EAGAIN/EWOULDBLOCK/EINTR instead of raising an exception. Returns `0` for EOF.
 - **`socket-send`**: on non-blocking sockets, returns `#f` on EAGAIN/EWOULDBLOCK/EINTR instead of raising an exception.
+- **`socket-shutdown`** and **`socket-peerinfo`**: now check errno and raise `socket-error` on failure.
 
 ### Backward-compatible improvements
 
-- **`socket-send`** now supports non-zero `start` offsets.
-- **`make-server-socket`** accepts an optional `reuse-addr?` argument at the end.
+- **`socket-send`** now supports non-zero `start` offsets and an optional `flags` argument.
+- **`socket-recv!`** now supports `start`/`count` arguments for receiving into a sub-range of a bytevector.
+- **`make-server-socket`** accepts optional `reuse-addr?` and `backlog` arguments at the end.
 - **`connect-server-socket`** and **`connect-client-socket`** accept an optional `reuse-addr?` argument.
 
 ### New APIs
@@ -216,6 +239,8 @@ bash .akku/env
 | `socket-recvfrom/address` | UDP `recvfrom` that returns `(values data host service)` |
 | `socket-set-timeout!` | Sets `SO_RCVTIMEO` / `SO_SNDTIMEO` in seconds |
 | `socket-set-nonblocking!` | Enable/disable `O_NONBLOCK` via `fcntl` |
+| `socket-nonblocking?` | Query whether `O_NONBLOCK` is set |
+| `socket-send-all` | Loop `socket-send` until the entire bytevector is sent (TCP) |
 | `make-unix-client-socket` | Create an `AF_UNIX` client socket |
 | `make-unix-server-socket` | Create an `AF_UNIX` listening socket |
 | `mcast-drop-membership` | Leave a multicast group |
@@ -227,5 +252,7 @@ bash .akku/env
 
 - `*eagain*` `*ewouldblock*` `*eintr*` — for non-blocking error handling
 - `*so-rcvtimeo*` `*so-sndtimeo*` — for timeout control
+- `*so-rcvbuf*` `*so-sndbuf*` — buffer size options
+- `*tcp-nodelay*` — disable Nagle algorithm (IPPROTO_TCP level)
 - `*af-unix*` — Unix domain socket address family
 - `*ip-add-membership*` `*ip-drop-membership*` — multicast options

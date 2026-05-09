@@ -215,6 +215,53 @@
   (assert-equal 'nonblocking-after-clear #f (socket-nonblocking? srv))
   (socket-close srv))
 
+;;; socket-recv with MSG_PEEK flag
+(let ([srv (connect-server-socket #f "15019" *af-inet* *sock-dgram* 0 *ipproto-udp*)])
+  (let ([cli (connect-client-socket "127.0.0.1" "15019" *af-inet* *sock-dgram* 0 *ipproto-udp*)])
+    (socket-send cli (string->utf8 "peektest"))
+    (let ([data1 (socket-recv srv 100 *msg-peek*)])
+      (assert-equal 'recv-peek-data "peektest" (utf8->string data1))
+      ;; data should still be in buffer, recv again without PEEK
+      (let ([data2 (socket-recv srv 100)])
+        (assert-equal 'recv-after-peek "peektest" (utf8->string data2))))
+    (socket-close cli)
+    (socket-close srv)))
+
+;;; open-socket-input-port / open-socket-output-port test
+(let ([srv (make-server-socket "15020")])
+  (let ([cli (make-client-socket "127.0.0.1" "15020")])
+    (let ([conn (socket-accept srv)])
+      (let ([out-port (open-socket-output-port cli)]
+            [in-port (open-socket-input-port conn)])
+        (put-u8 out-port 65)  ; 'A'
+        (flush-output-port out-port)
+        (let ([ch (get-u8 in-port)])
+          (assert-equal 'socket-port-get-u8 65 ch))
+        (close-output-port out-port)
+        (close-input-port in-port))
+      (socket-close conn)
+      (socket-close cli)
+      (socket-close srv))))
+
+;;; call-with-socket test
+(let ([srv (connect-server-socket #f "15021" *af-inet* *sock-dgram* 0 *ipproto-udp*)])
+  (let ([result (call-with-socket srv
+                   (lambda (sock)
+                     (socket-set-int! sock *sol-socket* *so-reuseaddr* 1)
+                     'ok))])
+    (assert-equal 'call-with-socket 'ok result)))
+
+;;; socket-send-all test (TCP)
+(let ([srv (make-server-socket "15022")])
+  (let ([cli (make-client-socket "127.0.0.1" "15022")])
+    (let ([conn (socket-accept srv)])
+      (socket-send-all cli (string->utf8 "hello-all"))
+      (let ([data (socket-recv conn 100)])
+        (assert-equal 'socket-send-all "hello-all" (utf8->string data)))
+      (socket-close conn)
+      (socket-close cli)
+      (socket-close srv))))
+
 ;;; Summary
 (display "=== ")(display pass-count)(display " passed, ")(display fail-count)(display " failed ===")(newline)
 (if (> fail-count 0) (exit 1) (exit 0))
