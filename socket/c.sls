@@ -48,6 +48,7 @@
     socket-send-all
     socket-get-linger socket-set-linger!
     socket-get-error
+    socket-accept/peerinfo
     )
   (import
    (chezscheme)
@@ -110,6 +111,22 @@
           [(errno-nonblocking? errno) #f]
           [else
            (raise-socket-error 'socket-accept errno "~a" (strerror errno))]))))
+
+  (define socket-accept/peerinfo
+    (case-lambda
+      [(sock)
+       (socket-accept/peerinfo sock 0)]
+      [(sock flags)
+       (let-values ([(peerfd errno) (call-procedure/errno accept (socket-file-descriptor sock) 0 0)])
+         (cond
+           [(fx>=? peerfd 0)
+            (let ([peer (make-socket peerfd)])
+              (let-values ([(host service) (socket-peerinfo peer flags)])
+                (values peer host service)))]
+           [(errno-nonblocking? errno)
+            (values #f #f #f)]
+           [else
+            (raise-socket-error 'socket-accept/peerinfo errno "~a" (strerror errno))]))]))
 
   (define socket-recv
     (case-lambda
@@ -202,11 +219,15 @@
   (define socket-send-all
     (case-lambda
       [(sock bv)
-       (socket-send-all sock bv 0 (bytevector-length bv))]
+       (socket-send-all sock bv 0 (bytevector-length bv) 0)]
+      [(sock bv flags)
+       (socket-send-all sock bv 0 (bytevector-length bv) flags)]
       [(sock bv start count)
+       (socket-send-all sock bv start count 0)]
+      [(sock bv start count flags)
        (let loop ([offset start] [remaining count])
          (when (fx>? remaining 0)
-           (let ([sent (socket-send sock bv offset remaining)])
+           (let ([sent (socket-send sock bv offset remaining flags)])
              (cond
                [(not sent)
                 (raise-socket-error 'socket-send-all *eagain* "socket would block before all data sent")]
@@ -217,7 +238,9 @@
 
   (define socket-close
     (lambda (sock)
-      (close (socket-file-descriptor sock))))
+      (let-values ([(rc errno) (call-procedure/errno close (socket-file-descriptor sock))])
+        (when (fx=? rc -1)
+          (raise-socket-error 'socket-close errno "~a" (strerror errno))))))
 
   (define socket-shutdown
     (lambda (sock how)

@@ -85,6 +85,7 @@
     socket-send-all
     socket-get-linger socket-set-linger!
     socket-get-error
+    socket-accept/peerinfo
     *so-rcvtimeo* *so-sndtimeo*
 
     ;;; Unix domain sockets

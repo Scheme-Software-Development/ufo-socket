@@ -322,6 +322,52 @@
   (assert-equal 'socket-get-error 0 (socket-get-error srv))
   (socket-close srv))
 
+;;; socket-accept/peerinfo test
+(let ([srv (make-server-socket "15027")])
+  (let ([cli (make-client-socket "127.0.0.1" "15027")])
+    (let-values ([(conn host service) (socket-accept/peerinfo srv)])
+      (if (or (string=? host "localhost") (string=? host "127.0.0.1"))
+          (assert-equal 'accept-peerinfo-host host host)
+          (begin
+            (set! fail-count (+ fail-count 1))
+            (display "FAIL accept-peerinfo-host: unexpected host ")(display host)(newline)))
+      (socket-close conn)
+      (socket-close cli)
+      (socket-close srv))))
+
+;;; socket-send-all with flags test (TCP)
+(let ([srv (make-server-socket "15028")])
+  (let ([cli (make-client-socket "127.0.0.1" "15028")])
+    (let ([conn (socket-accept srv)])
+      (socket-send-all cli (string->utf8 "all-flags") 0)
+      (let ([data (socket-recv conn 100)])
+        (assert-equal 'socket-send-all-flags "all-flags" (utf8->string data)))
+      (socket-close conn)
+      (socket-close cli)
+      (socket-close srv))))
+
+;;; socket-close normal path test
+(let ([srv (make-server-socket "15029")])
+  (socket-close srv)
+  (assert-equal 'socket-close-normal 'ok 'ok))
+
+;;; socket-set-timeout! actual effect test (very short timeout should return quickly)
+(let ([srv (connect-server-socket #f "15030" *af-inet* *sock-dgram* 0 *ipproto-udp*)])
+  (socket-set-nonblocking! srv #f)  ; blocking mode
+  (socket-set-timeout! srv 0.1 #f)  ; 100ms receive timeout
+  (let ([t0 (current-time 'time-monotonic)])
+    (let ([data (socket-recv srv 100)])
+      (let ([dt (time-difference (current-time 'time-monotonic) t0)])
+        (let ([sec (time-second dt)]
+              [nsec (time-nanosecond dt)])
+          (let ([elapsed (+ sec (/ nsec 1000000000.0))])
+            (if (and (>= elapsed 0.01) (< elapsed 0.5))
+                (assert-equal 'timeout-fast 'ok 'ok)
+                (begin
+                  (set! fail-count (+ fail-count 1))
+                  (display "FAIL timeout-fast: elapsed ")(display elapsed)(display "s")(newline))))))))
+  (socket-close srv))
+
 ;;; Summary
 (display "=== ")(display pass-count)(display " passed, ")(display fail-count)(display " failed ===")(newline)
 (if (> fail-count 0) (exit 1) (exit 0))
