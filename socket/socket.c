@@ -15,6 +15,7 @@
 #include <netinet/ip.h>
 #include <netdb.h>
 #include <arpa/inet.h>	// inet_pton
+#include <errno.h>
 
 #include <stdio.h>	// printf
 #include <stdlib.h>	// calloc, malloc
@@ -101,6 +102,14 @@ C_CONST_INT(NI_IDN_USE_STD3_ASCII_RULES);
 C_CONST_INT(NI_MAXHOST);
 C_CONST_INT(NI_MAXSERV);
 
+/* Errno values commonly needed for non-blocking socket handling. */
+C_CONST_INT(EAGAIN);
+C_CONST_INT(EWOULDBLOCK);
+C_CONST_INT(EINTR);
+
+/* Thread-safe errno accessor (avoids relying on Chez internals). */
+int c_errno(void) { return errno; }
+
 /* See getaddrinfo(2) for a full C client/server example. */
 
 /* addrinfo accessors. */
@@ -140,7 +149,7 @@ int
 mcast4_add_membership(int fd, const char* node, int interface)
 	{
 	int rc = -2;
-	// TODO Check on some BSDs, struct ip_mreqn might be Linux specific.
+#if defined(__linux__)
 	struct ip_mreqn req =
 		{
 		.imr_ifindex = interface,
@@ -150,6 +159,15 @@ mcast4_add_membership(int fd, const char* node, int interface)
 		/* Node address converted successfully. */
 		rc = setsockopt(fd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &req, sizeof(req));
 		}
+#else
+	/* Portable fallback using ip_mreq (interface index not supported). */
+	struct ip_mreq req;
+	if (inet_pton(AF_INET, node, &req.imr_multiaddr) == 1)
+		{
+		req.imr_interface.s_addr = INADDR_ANY;
+		rc = setsockopt(fd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &req, sizeof(req));
+		}
+#endif
 	return rc;
 	}
 

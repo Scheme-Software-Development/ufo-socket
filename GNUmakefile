@@ -44,7 +44,7 @@ FFIOBJ = $(PROJDIR)/socket.o
 FFILIB = $(PROJDIR)/libsocket.so
 
 # Source files, shared objects, and whole program optimisations for the library subdirectory.
-SUBSRC = $(addprefix $(PROJDIR)/,bytevector.sls c.chezscheme.sls ftypes-util.chezscheme.sls impl.chezscheme.sls)
+SUBSRC = $(addprefix $(PROJDIR)/,bytevector.sls c.sls ftypes-util.sls impl.sls posix-ffi.sls)
 SUBOBJ = $(SUBSRC:.sls=.so)
 SUBWPO = $(SUBSRC:.sls=.wpo)
 
@@ -93,19 +93,25 @@ $(FFILIB): $(FFIOBJ)
 %.o: %.c
 	$(CC) $(CFLAGS) $< -o $@
 
+# Ensure akku staging directory has symlinks for new source files.
+AKKU_LIB_SOCKET = .akku/lib/ufo-socket/socket
+
+$(AKKU_LIB_SOCKET)/posix-ffi.chezscheme.sls: socket/posix-ffi.sls
+	@mkdir -p $(AKKU_LIB_SOCKET)
+	ln -sf ../../../../socket/posix-ffi.sls $@
+
 # Build target is structured so that the main wpo file is dependant on all scheme source files and triggers
 # a Chez compile such that Chez rebuilds all dependancies on demand.
-$(TOPWPO): $(TOPSRC) $(SUBSRC)
-	echo '(reset-handler abort) (compile-imported-libraries #t) (generate-wpo-files #t) (library-directories ".") (compile-library "'$(TOPSRC)'")' | $(SCHEME) $(SFLAGS)
+$(TOPWPO): $(TOPSRC) $(SUBSRC) $(AKKU_LIB_SOCKET)/posix-ffi.chezscheme.sls
+	echo '(reset-handler abort) (compile-imported-libraries #t) (generate-wpo-files #t) (library-directories ".akku/lib") (compile-library "'$(TOPSRC)'")' | $(SCHEME) $(SFLAGS)
 
 $(SRFI_TOPWPO): $(TOPWPO) $(SRFI_TOPSRC) $(SRFI_SUBSRC)
-	echo '(reset-handler abort) (compile-imported-libraries #t) (generate-wpo-files #t) (library-directories ".") (compile-library "'$(SRFI_TOPSRC)'")' | $(SCHEME) $(SFLAGS)
+	echo '(reset-handler abort) (compile-imported-libraries #t) (generate-wpo-files #t) (library-directories ".akku/lib") (compile-library "'$(SRFI_TOPSRC)'")' | $(SCHEME) $(SFLAGS)
 
 $(LIBDIR)/%: %
 	$(INSTALL) -p -D "$<" "$@"
 
-build: $(FFILIB) 
-# $(TOPWPO) $(SRFI_TOPWPO)
+build: $(FFILIB) $(TOPWPO)
 
 # install-ffi is always required, installations then need to decide what combination of src/so they want.
 # Default install target is for everything.

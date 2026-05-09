@@ -32,6 +32,7 @@
               [msg '(display "scheme hello")])
           (let loop ()
             (display "multicasting msg: ")(display msg)(newline)
+            (flush-output-port (current-output-port))
             (write msg port)
             (flush-output-port port)
             (sleep 1-sec)
@@ -40,8 +41,9 @@
 (define consumer-run
   (lambda (node service afam)
     (display "multicast recv from ")(display node)(display ":")(display service)(newline)
+    ;; Bind to INADDR_ANY (node #f) and join the multicast group afterwards.
     (call-with-socket (connect-server-socket
-                        node service afam
+                        #f service afam
                         *sock-dgram*
                         (socket-merge-flags *ai-addrconfig* *ai-numericserv*)
                         *ipproto-udp*)
@@ -52,6 +54,7 @@
           (let loop ()
             (define msg (read port))
             (display "received msg: ")(display msg)(newline)
+            (flush-output-port (current-output-port))
             (loop)))))))
 
 (define help

@@ -14,90 +14,11 @@
     (rename
      (bitwise-ior socket-merge-flags)
      (bitwise-xor socket-purge-flags))
-    address-family ip-protocol message-type name-info socket-domain shutdown-method
-    define-bits
-    define-enum)
+    address-family ip-protocol message-type name-info socket-domain shutdown-method)
   (import
    (chezscheme)
-   (ufo-socket socket c))
-  ; (export (import (ufo-socket socket c)))
-
-  ;; [syntax] define-enum: generates a syntax transformer that evaluates the value of an enum at compile time.
-  ;; eg, using trace-define-syntax:
-  ;; > (define-enum e [a 1] [b 2] [c 3])
-  ;; |(define-enum (define-enum e (a 1) (b 2) (c 3)))
-  ;; |(define-syntax e
-  ;;    (lambda (x)
-  ;;      (syntax-case x ()
-  ;;        [(_ v) (eq? (datum v) (syntax->datum #'a)) #'1]
-  ;;        [(_ v) (eq? (datum v) (syntax->datum #'b)) #'2]
-  ;;        [(_ v) (eq? (datum v) (syntax->datum #'c)) #'3])))
-  ;; > (e a)
-  ;; 1
-  ;; > (e b)
-  ;; 2
-  ;; > (e c)
-  ;; 3
-  ;; > (e d)
-  ;; Exception: invalid syntax (e d)
-  ;; Type (debug) to enter the debugger.
-  ;; >
-  (define-syntax define-enum
-    (syntax-rules ()
-      [(_ group (var* val*) ...)
-       (define-syntax group
-         (lambda (x)
-           (syntax-case x ()
-             [(_ v)
-              (eq? (datum v) (syntax->datum #'var*))
-              #'val*] ...)))]))
-
-  ;; [syntax] define-bits: creates a syntax generator that bitwise ORs provided flags at compile time.
-  ;;
-  ;; eg, (with trace-define-syntax)
-  ;;
-  ;; > (define-bits e [a 1] [c 4] [d 8])
-  ;; |(define-bits (define-bits e (a 1) (c 4) (d 8)))
-  ;; |(define-syntax e
-  ;;    (lambda (x)
-  ;;      (define (sym->bits sym)
-  ;;        (case sym [a 1] [c 4] [d 8] [else (error 'e "invalid value" sym)]))
-  ;;      (syntax-case x ()
-  ;;        [(_ v ...)
-  ;;         (with-syntax ([bits (apply
-  ;;                               bitwise-ior
-  ;;                               (map sym->bits (syntax->datum #'(v ...))))])
-  ;;           #'bits)])))
-  ;; > (e a)
-  ;; 1
-  ;; > (e c)
-  ;; 4
-  ;; > (e d)
-  ;; 8
-  ;; > (e a d)
-  ;; 9
-  ;; > (e a c d)
-  ;; 13
-  ;; > (e x)
-  ;; Exception in e: invalid value with irritant x
-  ;; Type (debug) to enter the debugger.
-  (define-syntax define-bits
-    (syntax-rules ()
-      [(_ group (var* val*) ...)
-       (define-syntax group
-         (lambda (x)
-           (define (sym->bits sym)
-             (case sym
-               [var* val*]
-               ...
-               [else
-                 (error 'group "invalid value" sym)]))
-           ;; escape subsequent ellipsis (...) from enclosing syntax-rules.
-           (...
-             (syntax-case x ()
-               [(_ v ...)
-                (with-syntax ([bits (apply bitwise-ior (map sym->bits (syntax->datum #'(v ...))))])
-                  #'bits)]))))]))
+   (ufo-socket socket c)
+   (ufo-socket socket ftypes-util))
 
   (define-enum address-family
     [inet	*af-inet*]
@@ -168,7 +89,9 @@
       [(service ai-family ai-socktype)
        (make-server-socket service ai-family ai-socktype *ipproto-ip*)]
       [(service ai-family ai-socktype ai-protocol)
-       (connect-server-socket #f service ai-family ai-socktype (bitwise-ior *ai-v4mapped* *ai-addrconfig*) ai-protocol)]))
+       (make-server-socket service ai-family ai-socktype ai-protocol #f)]
+      [(service ai-family ai-socktype ai-protocol reuse-addr?)
+       (connect-server-socket #f service ai-family ai-socktype (bitwise-ior *ai-v4mapped* *ai-addrconfig*) ai-protocol reuse-addr?)]))
 
   ;; call-with-socket is adapted from the call-with-port example found here:
   ;; https://scheme.com/tspl4/control.html#defn:call-with-port

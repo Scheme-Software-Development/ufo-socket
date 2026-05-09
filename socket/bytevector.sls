@@ -17,14 +17,16 @@
         bv)))
 
   ;; Like bytevector->string except it ends at the first null source byte.
+  ;; O(n) single-pass implementation.
   (define bytevector/null->string
     (lambda (bv)
-      (utf8->string
-        (let f ([i 0])
-          (let ([c (bytevector-u8-ref bv i)])
-            (if (fx=? c 0)
-              (make-bytevector i)
-              (let ([ret (f (fx+ i 1))])
-                (bytevector-u8-set! ret i c)
-                ret)))))))
-  )
+      (let ([len (bytevector-length bv)])
+        (let loop ([i 0])
+          (cond
+            [(fx=? i len) (utf8->string bv)]
+            [(fx=? (bytevector-u8-ref bv i) 0)
+             (let ([slice (make-bytevector i)])
+               (bytevector-copy! bv 0 slice 0 i)
+               (utf8->string slice))]
+            [else (loop (fx+ i 1))]))))))
+
