@@ -15,7 +15,7 @@
     *somaxconn*
     *sol-socket*
     *so-acceptconn* *so-broadcast* *so-domain* *so-dontroute* *so-error* *so-keepalive* *so-linger* *so-oobinline*
-    *so-protocol* *so-reuseaddr* *so-type*
+    *so-protocol* *so-reuseaddr* *so-type* *so-reuseport*
     *so-rcvbuf* *so-sndbuf*
     *tcp-nodelay*
     *ip-multicast-loop* *ip-multicast-ttl* *ip-multicast-if*
@@ -33,7 +33,7 @@
 
     ;; Raw C functions
     socket accept close bind connect listen recv recvfrom send shutdown strerror
-    getaddrinfo freeaddrinfo getpeername getnameinfo gai-strerror gethostname
+    getaddrinfo freeaddrinfo getpeername getsockname getnameinfo gai-strerror gethostname
     getsockopt setsockopt
     make-addrinfo-hints addrinfo-flags addrinfo-family addrinfo-socktype
     addrinfo-protocol addrinfo-addrlen addrinfo-addr addrinfo-next
@@ -93,7 +93,7 @@
     *sol-socket*
     *so-acceptconn* *so-broadcast* *so-domain* *so-dontroute* *so-error* *so-keepalive* *so-linger* *so-oobinline*
     *so-protocol* *so-reuseaddr* *so-type*
-    *so-rcvbuf* *so-sndbuf*
+    *so-rcvbuf* *so-sndbuf* *so-reuseport*
     *ip-multicast-loop* *ip-multicast-ttl* *ip-multicast-if*
     *ip-add-membership* *ip-drop-membership*
     *ni-namereqd* *ni-dgram* *ni-nofqdn* *ni-numerichost* *ni-numericserv*
@@ -127,6 +127,7 @@
     [getaddrinfo (string string addrinfo* (* addrinfo*)) int]
     [freeaddrinfo (addrinfo*) void]
     [getpeername (int u8* (* socklen-t)) int]
+    [getsockname (int u8* (* socklen-t)) int]
     [getnameinfo (u8* socklen-t u8* socklen-t u8* socklen-t int) int]
     [gai-strerror (int) string]
     [gethostname (u8* size_t) int]

@@ -24,7 +24,7 @@
     *sol-socket*
     *so-acceptconn* *so-broadcast* *so-domain* *so-dontroute* *so-error* *so-keepalive* *so-linger* *so-oobinline*
     *so-protocol* *so-reuseaddr* *so-type*
-    *so-rcvbuf* *so-sndbuf* *tcp-nodelay*
+    *so-rcvbuf* *so-sndbuf* *so-reuseport* *tcp-nodelay*
 
     *ni-namereqd* *ni-dgram* *ni-nofqdn* *ni-numerichost* *ni-numericserv*
     *ni-maxhost* *ni-maxserv*
@@ -49,6 +49,7 @@
     socket-get-linger socket-set-linger!
     socket-get-error
     socket-accept/peerinfo
+    socket-getsockname
     )
   (import
    (chezscheme)
@@ -389,18 +390,28 @@
           [else
             (raise-socket-error 'gethostname errno "~a" (strerror errno))]))))
 
+  (define (peerinfo-from-fd proc sockfd flags who)
+    (alloc ([salen &salen socklen-t])
+      (ftype-set! socklen-t () &salen *s-sizeof-sockaddr*)
+      (let ([saddr (make-bytevector *s-sizeof-sockaddr*)])
+        (let-values ([(rc errno) (call-procedure/errno proc sockfd saddr &salen)])
+          (if (fx=? rc 0)
+              (getnameinfo/bv (bytevector-slice saddr (ftype-ref socklen-t () &salen)) flags)
+              (raise-socket-error who errno "~a" (strerror errno)))))))
+
   (define socket-peerinfo
     (case-lambda
       [(sock)
        (socket-peerinfo sock 0)]
       [(sock flags)
-       (alloc ([salen &salen socklen-t])
-         (ftype-set! socklen-t () &salen *s-sizeof-sockaddr*)
-         (let ([saddr (make-bytevector *s-sizeof-sockaddr*)])
-           (let-values ([(rc errno) (call-procedure/errno getpeername (socket-file-descriptor sock) saddr &salen)])
-             (if (fx=? rc 0)
-                 (getnameinfo/bv (bytevector-slice saddr (ftype-ref socklen-t () &salen)) flags)
-                 (raise-socket-error 'socket-peerinfo errno "~a" (strerror errno))))))]))
+       (peerinfo-from-fd getpeername (socket-file-descriptor sock) flags 'socket-peerinfo)]))
+
+  (define socket-getsockname
+    (case-lambda
+      [(sock)
+       (socket-getsockname sock 0)]
+      [(sock flags)
+       (peerinfo-from-fd getsockname (socket-file-descriptor sock) flags 'socket-getsockname)]))
 
   (define socket-recvfrom/address
     (case-lambda
@@ -413,7 +424,7 @@
                    [saddr (cdr result)])
                (let-values ([(host service) (getnameinfo/bv saddr)])
                  (values data host service)))
-             result))]))
+             (values result #f #f)))]))
 
   (define mcast-add-membership
     (case-lambda

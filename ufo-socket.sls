@@ -68,7 +68,7 @@
     *sol-socket*
     *so-acceptconn* *so-broadcast* *so-domain* *so-dontroute* *so-error*
     *so-keepalive* *so-linger* *so-oobinline* *so-protocol* *so-reuseaddr* *so-type*
-    *so-rcvbuf* *so-sndbuf* *tcp-nodelay*
+    *so-rcvbuf* *so-sndbuf* *so-reuseport* *tcp-nodelay*
     *ip-multicast-loop* *ip-multicast-ttl* *ip-multicast-if*
     *ip-add-membership* *ip-drop-membership*
     socket-get-int socket-set-int!
@@ -86,6 +86,7 @@
     socket-get-linger socket-set-linger!
     socket-get-error
     socket-accept/peerinfo
+    socket-getsockname
     *so-rcvtimeo* *so-sndtimeo*
 
     ;;; Unix domain sockets

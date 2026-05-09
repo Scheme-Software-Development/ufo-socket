@@ -368,6 +368,33 @@
                   (display "FAIL timeout-fast: elapsed ")(display elapsed)(display "s")(newline))))))))
   (socket-close srv))
 
+;;; socket-recvfrom/address on non-blocking socket returns 3 values
+(let ([srv (connect-server-socket #f "15031" *af-inet* *sock-dgram* 0 *ipproto-udp*)])
+  (socket-set-nonblocking! srv #t)
+  (let-values ([(data host service) (socket-recvfrom/address srv 100)])
+    (assert-equal 'recvfrom-address-nonblocking #f data)
+    (assert-equal 'recvfrom-address-nonblocking-host #f host)
+    (assert-equal 'recvfrom-address-nonblocking-service #f service))
+  (socket-close srv))
+
+;;; socket-getsockname test
+(let ([srv (make-server-socket "15032")])
+  (let-values ([(host service) (socket-getsockname srv)])
+    ;; IPv4 server bound to 0.0.0.0:15032; getnameinfo may return "localhost" depending on /etc/hosts
+    (if (or (string=? host "0.0.0.0") (string=? host "::") (string=? host "localhost"))
+        (assert-equal 'getsockname-host host host)
+        (begin
+          (set! fail-count (+ fail-count 1))
+          (display "FAIL getsockname-host: unexpected host ")(display host)(newline)))
+    (assert-equal 'getsockname-service "15032" service))
+  (socket-close srv))
+
+;;; SO_REUSEPORT round-trip
+(let ([srv (make-server-socket "15033")])
+  (socket-set-int! srv *sol-socket* *so-reuseport* 1)
+  (assert-equal 'socket-option-reuseport 1 (socket-get-int srv *sol-socket* *so-reuseport*))
+  (socket-close srv))
+
 ;;; Summary
 (display "=== ")(display pass-count)(display " passed, ")(display fail-count)(display " failed ===")(newline)
 (if (> fail-count 0) (exit 1) (exit 0))

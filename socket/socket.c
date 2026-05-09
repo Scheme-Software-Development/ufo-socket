@@ -75,6 +75,7 @@ C_CONST_INT(SO_LINGER);		/* linger struct. */
 C_CONST_INT(SO_OOBINLINE);	/* bool */
 C_CONST_INT(SO_PROTOCOL);	/* int read-only: eg, IPPROTO_TCP */
 C_CONST_INT(SO_REUSEADDR);	/* bool */
+C_CONST_INT(SO_REUSEPORT);	/* bool */
 C_CONST_INT(SO_TYPE);		/* int read-only: eg, SOCK_STREAM */
 C_CONST_INT(SO_RCVBUF);		/* int */
 C_CONST_INT(SO_SNDBUF);		/* int */
