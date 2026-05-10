@@ -24,6 +24,8 @@
     *ni-maxhost* *ni-maxserv*
     *s-sizeof-sockaddr*
     *eagain* *ewouldblock* *eintr*
+    *einprogress* *econnrefused* *etimedout* *eisconn*
+    *econnreset* *econnaborted* *enetunreach* *ehostunreach*
     *so-rcvtimeo* *so-sndtimeo*
     *af-unix*
     *sizeof-sockaddr-un*
@@ -41,6 +43,7 @@
     mcast4-drop-membership mcast6-drop-membership
     socket-set-timeout make-sockaddr-un
     socket-set-nonblocking socket-get-nonblocking
+    socket-connect-timeout
     recv-offset send-offset
 
     ;; Socket record type
@@ -100,6 +103,8 @@
     *ni-maxhost* *ni-maxserv*
     *s-sizeof-sockaddr*
     *eagain* *ewouldblock* *eintr*
+    *einprogress* *econnrefused* *etimedout* *eisconn*
+    *econnreset* *econnaborted* *enetunreach* *ehostunreach*
     *so-rcvtimeo* *so-sndtimeo*
     *af-unix*
     *sizeof-sockaddr-un*
@@ -157,6 +162,7 @@
     [socket-get-nonblocking (int) int]
     [recv-offset (int u8* size_t size_t int) ssize_t]
     [send-offset (int u8* size_t size_t int) ssize_t]
+    [socket-connect-timeout (int sockaddr* socklen-t int) int]
 )
 
   ;; The socket record type.

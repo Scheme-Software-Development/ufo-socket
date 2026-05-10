@@ -78,7 +78,9 @@
      [(node service ai-family ai-socktype ai-flags)
       (make-client-socket node service ai-family ai-socktype ai-flags *ipproto-ip*)]
      [(node service ai-family ai-socktype ai-flags ai-protocol)
-      (connect-client-socket node service ai-family ai-socktype ai-flags ai-protocol)]))
+      (make-client-socket node service ai-family ai-socktype ai-flags ai-protocol #f)]
+     [(node service ai-family ai-socktype ai-flags ai-protocol timeout)
+      (connect-client-socket node service ai-family ai-socktype ai-flags ai-protocol #f timeout)]))
 
   (define make-server-socket
     (case-lambda
@@ -89,7 +91,7 @@
       [(service ai-family ai-socktype)
        (make-server-socket service ai-family ai-socktype *ipproto-ip*)]
       [(service ai-family ai-socktype ai-protocol)
-       (make-server-socket service ai-family ai-socktype ai-protocol #f *somaxconn*)]
+       (make-server-socket service ai-family ai-socktype ai-protocol (create-socket-reuseaddr) *somaxconn*)]
       [(service ai-family ai-socktype ai-protocol reuse-addr?)
        (make-server-socket service ai-family ai-socktype ai-protocol reuse-addr? *somaxconn*)]
       [(service ai-family ai-socktype ai-protocol reuse-addr? backlog)

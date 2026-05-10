@@ -29,6 +29,8 @@
     *ni-namereqd* *ni-dgram* *ni-nofqdn* *ni-numerichost* *ni-numericserv*
     *ni-maxhost* *ni-maxserv*
     *eagain* *ewouldblock* *eintr*
+    *einprogress* *econnrefused* *etimedout* *eisconn*
+    *econnreset* *econnaborted* *enetunreach* *ehostunreach*
     *somaxconn*
     *so-rcvtimeo* *so-sndtimeo*
     *af-unix*
@@ -40,6 +42,14 @@
 
     mcast-add-membership mcast-drop-membership
     socket-error socket-error? raise-socket-error
+    socket-error-errno-is?
+    socket-connection-refused-error?
+    socket-timed-out-error?
+    socket-already-connected-error?
+    socket-connection-reset-error?
+    socket-connection-aborted-error?
+    socket-network-unreachable-error?
+    socket-host-unreachable-error?
     getaddrinfo*
     socket-recvfrom/address
     socket-set-timeout!
@@ -97,12 +107,43 @@
   (define connect-client-socket
     (case-lambda
       [(node service family socktype flags protocol)
-       (connect-client-socket node service family socktype flags protocol #f)]
+       (connect-client-socket node service family socktype flags protocol #f #f)]
       [(node service family socktype flags protocol reuse-addr?)
-       (connect-socket node service family socktype flags protocol connect reuse-addr?)]))
+       (connect-client-socket node service family socktype flags protocol reuse-addr? #f)]
+      [(node service family socktype flags protocol reuse-addr? timeout)
+       (let ([action (if timeout
+                         (let ([ms (inexact->exact (round (* timeout 1000)))])
+                           (lambda (sockfd addr addrlen)
+                             (socket-connect-timeout sockfd addr addrlen ms)))
+                         connect)])
+         (connect-socket node service family socktype flags protocol action reuse-addr?))]))
 
   (define (errno-nonblocking? errno)
     (or (fx=? errno *eagain*) (fx=? errno *ewouldblock*) (fx=? errno *eintr*)))
+
+  (define (socket-error-errno-is? err errno-val)
+    (and (socket-error? err) (eqv? (socket-error-errno err) errno-val)))
+
+  (define (socket-connection-refused-error? err)
+    (socket-error-errno-is? err *econnrefused*))
+
+  (define (socket-timed-out-error? err)
+    (socket-error-errno-is? err *etimedout*))
+
+  (define (socket-already-connected-error? err)
+    (socket-error-errno-is? err *eisconn*))
+
+  (define (socket-connection-reset-error? err)
+    (socket-error-errno-is? err *econnreset*))
+
+  (define (socket-connection-aborted-error? err)
+    (socket-error-errno-is? err *econnaborted*))
+
+  (define (socket-network-unreachable-error? err)
+    (socket-error-errno-is? err *enetunreach*))
+
+  (define (socket-host-unreachable-error? err)
+    (socket-error-errno-is? err *ehostunreach*))
 
   (define socket-accept
     (lambda (sock)
@@ -226,16 +267,20 @@
       [(sock bv start count)
        (socket-send-all sock bv start count 0)]
       [(sock bv start count flags)
-       (let loop ([offset start] [remaining count])
-         (when (fx>? remaining 0)
-           (let ([sent (socket-send sock bv offset remaining flags)])
-             (cond
-               [(not sent)
-                (raise-socket-error 'socket-send-all *eagain* "socket would block before all data sent")]
-               [(fx>? sent 0)
-                (loop (fx+ offset sent) (fx- remaining sent))]
-               [else
-                (raise-socket-error 'socket-send-all #f "send returned 0 before all data sent")]))))]))
+       (let ([fd (socket-file-descriptor sock)])
+         (let loop ([offset start] [remaining count])
+           (if (fx>? remaining 0)
+               (let-values ([(rc errno) (call-procedure/errno send-offset fd bv offset remaining flags)])
+                 (cond
+                   [(fx>? rc 0)
+                    (loop (fx+ offset rc) (fx- remaining rc))]
+                   [(fx=? rc 0)
+                    (raise-socket-error 'socket-send-all #f "send returned 0 before all data sent")]
+                   [(errno-nonblocking? errno)
+                    (raise-socket-error 'socket-send-all errno "socket would block before all data sent: ~a" (strerror errno))]
+                   [else
+                    (raise-socket-error 'socket-send-all errno "~a" (strerror errno))]))
+               count)))]))
 
   (define socket-close
     (lambda (sock)
@@ -310,27 +355,28 @@
       (let* ([hints (make-addrinfo-hints flags family socktype protocol)]
              [addrinfos (getaddrinfo* node service hints)])
         (freeaddrinfo hints)
-        (let loop ([as addrinfos])
+        (let loop ([as addrinfos] [last-errno #f])
           (cond
             [(null? as)
              (freeaddrinfo-list addrinfos)
-             (raise-socket-error 'connect-socket #f "no suitable address found: ~a ~a" node service)]
+             (raise-socket-error 'connect-socket last-errno "no suitable address found: ~a ~a" node service)]
             [else
-              (let* ([ai (car as)]
-                     [sockfd (socket (addrinfo-family ai) (addrinfo-socktype ai) (addrinfo-protocol ai))])
-                (case sockfd
-                  [-1
-                    (loop (cdr as))]
-                  [else
+             (let* ([ai (car as)])
+               (let-values ([(sockfd errno) (call-procedure/errno socket (addrinfo-family ai) (addrinfo-socktype ai) (addrinfo-protocol ai))])
+                 (cond
+                   [(fx=? sockfd -1)
+                    (loop (cdr as) errno)]
+                   [else
                     (when (or reuse-addr? (create-socket-reuseaddr))
                       (socket-set-int! sockfd *sol-socket* *so-reuseaddr* 1))
-                    (case (action sockfd (addrinfo-addr ai) (addrinfo-addrlen ai))
-                      [0
-                       (freeaddrinfo-list addrinfos)
-                       (make-socket sockfd)]
-                      [else
-                        (close sockfd)
-                        (loop (cdr as))])]))])))))
+                    (let-values ([(rc errno) (call-procedure/errno action sockfd (addrinfo-addr ai) (addrinfo-addrlen ai))])
+                      (cond
+                        [(fx=? rc 0)
+                         (freeaddrinfo-list addrinfos)
+                         (make-socket sockfd)]
+                        [else
+                         (close sockfd)
+                         (loop (cdr as) errno)]))])))])))))
 
   (define getaddrinfo*
     (case-lambda

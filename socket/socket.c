@@ -19,6 +19,7 @@
 #include <arpa/inet.h>	// inet_pton
 #include <errno.h>
 #include <fcntl.h>
+#include <sys/select.h>
 
 #include <stdio.h>	// printf
 #include <stdlib.h>	// calloc, malloc
@@ -80,6 +81,16 @@ C_CONST_INT(SO_TYPE);		/* int read-only: eg, SOCK_STREAM */
 C_CONST_INT(SO_RCVBUF);		/* int */
 C_CONST_INT(SO_SNDBUF);		/* int */
 C_CONST_INT(TCP_NODELAY);		/* bool: IPPROTO_TCP level */
+
+/* Errno values for error type predicates. */
+C_CONST_INT(EINPROGRESS);
+C_CONST_INT(ECONNREFUSED);
+C_CONST_INT(ETIMEDOUT);
+C_CONST_INT(EISCONN);
+C_CONST_INT(ECONNRESET);
+C_CONST_INT(ECONNABORTED);
+C_CONST_INT(ENETUNREACH);
+C_CONST_INT(EHOSTUNREACH);
 
 const int c_S_SIZEOF_SOCKADDR = sizeof(struct sockaddr_storage);
 
@@ -350,4 +361,63 @@ mcast6_drop_membership(int fd, const char* node, int interface)
 		rc = setsockopt(fd, IPPROTO_IPV6, IPV6_DROP_MEMBERSHIP, &req, sizeof(req));
 		}
 	return rc;
+	}
+
+/* socket_connect_timeout: perform a blocking connect with a timeout.
+ * Sets the socket to non-blocking, calls connect(), and uses select()
+ * to wait for the connection to complete within timeout_ms milliseconds.
+ * On success, restores the original file status flags and returns 0.
+ * On failure, returns -1 and sets errno appropriately.
+ */
+int
+socket_connect_timeout(int fd, const struct sockaddr* addr, socklen_t addrlen, int timeout_ms)
+	{
+	int flags = fcntl(fd, F_GETFL, 0);
+	if (flags < 0)
+		return -1;
+
+	if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0)
+		return -1;
+
+	int rc = connect(fd, addr, addrlen);
+	if (rc == 0)
+		{
+		fcntl(fd, F_SETFL, flags);
+		return 0;
+		}
+
+	if (errno != EINPROGRESS)
+		return -1;
+
+	fd_set wfds;
+	FD_ZERO(&wfds);
+	FD_SET(fd, &wfds);
+
+	struct timeval tv;
+	tv.tv_sec = timeout_ms / 1000;
+	tv.tv_usec = (timeout_ms % 1000) * 1000;
+
+	rc = select(fd + 1, NULL, &wfds, NULL, &tv);
+	if (rc < 0)
+		return -1;
+	if (rc == 0)
+		{
+		errno = ETIMEDOUT;
+		return -1;
+		}
+
+	int soerr;
+	socklen_t soerrlen = sizeof(soerr);
+	if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &soerr, &soerrlen) < 0)
+		return -1;
+
+	if (soerr != 0)
+		{
+		errno = soerr;
+		return -1;
+		}
+
+	/* Restore original flags. Failure here is not fatal. */
+	fcntl(fd, F_SETFL, flags);
+	return 0;
 	}

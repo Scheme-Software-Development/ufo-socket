@@ -100,8 +100,20 @@
     ;;; Non-blocking / error constants
     *eagain* *ewouldblock* *eintr*
 
+    ;;; Connection error constants
+    *einprogress* *econnrefused* *etimedout* *eisconn*
+    *econnreset* *econnaborted* *enetunreach* *ehostunreach*
+
     ;;; Structured exceptions
-    socket-error socket-error? raise-socket-error)
+    socket-error socket-error? raise-socket-error
+    socket-error-errno-is?
+    socket-connection-refused-error?
+    socket-timed-out-error?
+    socket-already-connected-error?
+    socket-connection-reset-error?
+    socket-connection-aborted-error?
+    socket-network-unreachable-error?
+    socket-host-unreachable-error?)
   (import
     (chezscheme)
     (ufo-socket socket c)

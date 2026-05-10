@@ -8,6 +8,8 @@
   (ufo-socket)
   (ufo-socket socket bytevector))
 
+(create-socket-reuseaddr #t)
+
 (define fail-count 0)
 (define pass-count 0)
 
@@ -162,8 +164,8 @@
   (socket-close srv))
 
 ;;; socket-shutdown test
-(let ([srv (make-server-socket "15015")])
-  (let ([cli (make-client-socket "127.0.0.1" "15015")])
+(let ([srv (connect-server-socket #f "15034" *af-inet* *sock-stream* 0 *ipproto-ip* #t 128)])
+  (let ([cli (make-client-socket "127.0.0.1" "15034")])
     (let ([conn (socket-accept srv)])
       (socket-send cli (string->utf8 "hello"))
       (let ([data (socket-recv conn 100)])
@@ -178,7 +180,7 @@
       (socket-close srv))))
 
 ;;; socket-peerinfo test
-(let ([srv (make-server-socket "15016")])
+(let ([srv (connect-server-socket #f "15016" *af-inet* *sock-stream* 0 *ipproto-ip* #t 128)])
   (let ([cli (make-client-socket "127.0.0.1" "15016")])
     (let ([conn (socket-accept srv)])
       (let-values ([(host service) (socket-peerinfo conn)])
@@ -394,6 +396,50 @@
   (socket-set-int! srv *sol-socket* *so-reuseport* 1)
   (assert-equal 'socket-option-reuseport 1 (socket-get-int srv *sol-socket* *so-reuseport*))
   (socket-close srv))
+
+;;; Error predicate tests
+(let ([err (guard (ex [else ex]) (raise-socket-error 'test *econnrefused* "refused"))])
+  (assert-equal 'err-pred-refused #t (socket-connection-refused-error? err))
+  (assert-equal 'err-pred-refused-false #f (socket-timed-out-error? err))
+  (assert-equal 'err-pred-errno-is #t (socket-error-errno-is? err *econnrefused*)))
+
+(let ([err (guard (ex [else ex]) (raise-socket-error 'test *etimedout* "timeout"))])
+  (assert-equal 'err-pred-timedout #t (socket-timed-out-error? err))
+  (assert-equal 'err-pred-timedout-false #f (socket-connection-refused-error? err))
+  (assert-equal 'err-pred-errno-is-timedout #t (socket-error-errno-is? err *etimedout*)))
+
+(let ([err (guard (ex [else ex]) (raise-socket-error 'test *eisconn* "already"))])
+  (assert-equal 'err-pred-isconn #t (socket-already-connected-error? err)))
+
+(let ([err (guard (ex [else ex]) (raise-socket-error 'test *econnreset* "reset"))])
+  (assert-equal 'err-pred-reset #t (socket-connection-reset-error? err)))
+
+(let ([err (guard (ex [else ex]) (raise-socket-error 'test *econnaborted* "aborted"))])
+  (assert-equal 'err-pred-aborted #t (socket-connection-aborted-error? err)))
+
+(let ([err (guard (ex [else ex]) (raise-socket-error 'test *enetunreach* "netunreach"))])
+  (assert-equal 'err-pred-netunreach #t (socket-network-unreachable-error? err)))
+
+(let ([err (guard (ex [else ex]) (raise-socket-error 'test *ehostunreach* "hostunreach"))])
+  (assert-equal 'err-pred-hostunreach #t (socket-host-unreachable-error? err)))
+
+;;; connect-client-socket timeout test (connect to non-routable address with short timeout)
+(let ([start (current-time 'time-monotonic)])
+  (guard (ex [(and (socket-error? ex) (socket-timed-out-error? ex))
+              (let ([elapsed (time-difference (current-time 'time-monotonic) start)])
+                (let ([sec (time-second elapsed)]
+                      [nsec (time-nanosecond elapsed)])
+                  (let ([total (+ sec (/ nsec 1000000000.0))])
+                    (if (and (>= total 0.1) (< total 0.5))
+                        (assert-equal 'connect-timeout-fast 'ok 'ok)
+                        (begin
+                          (set! fail-count (+ fail-count 1))
+                          (display "FAIL connect-timeout-fast: elapsed ")(display total)(display "s")(newline))))))]
+             [else
+              (set! fail-count (+ fail-count 1))
+              (display "FAIL connect-timeout-fast: unexpected exception ")(display ex)(newline)])
+    ;; Use a non-routable address (TEST-NET-1) with a 200ms timeout
+    (connect-client-socket "192.0.2.1" "12345" *af-inet* *sock-stream* 0 *ipproto-ip* #f 0.2)))
 
 ;;; Summary
 (display "=== ")(display pass-count)(display " passed, ")(display fail-count)(display " failed ===")(newline)
