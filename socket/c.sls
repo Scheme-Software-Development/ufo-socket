@@ -112,9 +112,18 @@
        (connect-client-socket node service family socktype flags protocol reuse-addr? #f)]
       [(node service family socktype flags protocol reuse-addr? timeout)
        (let ([action (if timeout
-                         (let ([ms (inexact->exact (round (* timeout 1000)))])
+                         (let ([start (current-time 'time-monotonic)]
+                               [total-ms (inexact->exact (round (* timeout 1000)))])
                            (lambda (sockfd addr addrlen)
-                             (socket-connect-timeout sockfd addr addrlen ms)))
+                             (let ([elapsed (time-difference (current-time 'time-monotonic) start)])
+                               (let ([elapsed-ms (+ (* (time-second elapsed) 1000)
+                                                    (div (time-nanosecond elapsed) 1000000))])
+                                 (let ([remaining (fx- total-ms elapsed-ms)])
+                                   (if (fx>? remaining 0)
+                                       (socket-connect-timeout sockfd addr addrlen remaining)
+                                       (begin
+                                         (set-errno *etimedout*)
+                                         -1)))))))
                          connect)])
          (connect-socket node service family socktype flags protocol action reuse-addr?))]))
 
@@ -277,7 +286,10 @@
                    [(fx=? rc 0)
                     (raise-socket-error 'socket-send-all #f "send returned 0 before all data sent")]
                    [(errno-nonblocking? errno)
-                    (raise-socket-error 'socket-send-all errno "socket would block before all data sent: ~a" (strerror errno))]
+                    (if (socket-nonblocking? sock)
+                        (raise-socket-error 'socket-send-all errno "socket would block before all data sent: ~a" (strerror errno))
+                        ;; Blocking socket: EINTR can occur; retry instead of raising.
+                        (loop offset remaining))]
                    [else
                     (raise-socket-error 'socket-send-all errno "~a" (strerror errno))]))
                count)))]))
@@ -374,6 +386,11 @@
                         [(fx=? rc 0)
                          (freeaddrinfo-list addrinfos)
                          (make-socket sockfd)]
+                        [(fx=? errno *etimedout*)
+                         ;; Total timeout reached: don't waste time on fallback addresses.
+                         (close sockfd)
+                         (freeaddrinfo-list addrinfos)
+                         (raise-socket-error 'connect-socket errno "~a" (strerror errno))]
                         [else
                          (close sockfd)
                          (loop (cdr as) errno)]))])))])))))

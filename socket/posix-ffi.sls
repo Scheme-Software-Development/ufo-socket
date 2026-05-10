@@ -44,6 +44,7 @@
     socket-set-timeout make-sockaddr-un
     socket-set-nonblocking socket-get-nonblocking
     socket-connect-timeout
+    set-errno
     recv-offset send-offset
 
     ;; Socket record type
@@ -163,6 +164,7 @@
     [recv-offset (int u8* size_t size_t int) ssize_t]
     [send-offset (int u8* size_t size_t int) ssize_t]
     [socket-connect-timeout (int sockaddr* socklen-t int) int]
+    [set-errno (int) void]
 )
 
   ;; The socket record type.

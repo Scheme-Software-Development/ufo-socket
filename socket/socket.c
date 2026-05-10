@@ -363,11 +363,16 @@ mcast6_drop_membership(int fd, const char* node, int interface)
 	return rc;
 	}
 
+/* set_errno: allow Scheme to set errno for synthetic error reporting.
+ */
+void set_errno(int e) { errno = e; }
+
 /* socket_connect_timeout: perform a blocking connect with a timeout.
  * Sets the socket to non-blocking, calls connect(), and uses select()
  * to wait for the connection to complete within timeout_ms milliseconds.
  * On success, restores the original file status flags and returns 0.
  * On failure, returns -1 and sets errno appropriately.
+ * The original flags are always restored before returning.
  */
 int
 socket_connect_timeout(int fd, const struct sockaddr* addr, socklen_t addrlen, int timeout_ms)
@@ -376,18 +381,19 @@ socket_connect_timeout(int fd, const struct sockaddr* addr, socklen_t addrlen, i
 	if (flags < 0)
 		return -1;
 
-	if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0)
-		return -1;
+	int rc = fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+	if (rc < 0)
+		goto out;
 
-	int rc = connect(fd, addr, addrlen);
+	rc = connect(fd, addr, addrlen);
 	if (rc == 0)
-		{
-		fcntl(fd, F_SETFL, flags);
-		return 0;
-		}
+		goto out;
 
 	if (errno != EINPROGRESS)
-		return -1;
+		{
+		rc = -1;
+		goto out;
+		}
 
 	fd_set wfds;
 	FD_ZERO(&wfds);
@@ -399,25 +405,33 @@ socket_connect_timeout(int fd, const struct sockaddr* addr, socklen_t addrlen, i
 
 	rc = select(fd + 1, NULL, &wfds, NULL, &tv);
 	if (rc < 0)
-		return -1;
+		goto out;
 	if (rc == 0)
 		{
 		errno = ETIMEDOUT;
-		return -1;
+		rc = -1;
+		goto out;
 		}
 
 	int soerr;
 	socklen_t soerrlen = sizeof(soerr);
 	if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &soerr, &soerrlen) < 0)
-		return -1;
+		{
+		rc = -1;
+		goto out;
+		}
 
 	if (soerr != 0)
 		{
 		errno = soerr;
-		return -1;
+		rc = -1;
+		goto out;
 		}
 
+	rc = 0;
+
+out:
 	/* Restore original flags. Failure here is not fatal. */
 	fcntl(fd, F_SETFL, flags);
-	return 0;
+	return rc;
 	}

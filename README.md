@@ -98,6 +98,24 @@ See the *extended* source file for a list of the options that are defined.
 [proc] socket-send:  Send data. Returns bytes sent, or #f on EAGAIN/EWOULDBLOCK/EINTR
                        in non-blocking mode.
 ```
+```
+[proc] socket-send-all: Send the entire bytevector. Returns the total bytes sent.
+                          In blocking mode, automatically retries on EINTR.
+                          In non-blocking mode, raises socket-error with the real
+                          errno (EAGAIN/EWOULDBLOCK) if the send would block.
+```
+
+### Client socket with connection timeout
+
+```scheme
+(make-client-socket "example.com" "80"
+                    (address-family inet) (socket-domain stream)
+                    (bitwise-ior *ai-v4mapped* *ai-addrconfig*)
+                    (ip-protocol tcp)
+                    5.0)   ; 5 second total timeout (float seconds allowed)
+```
+
+The timeout is a **total deadline**. If `getaddrinfo` returns multiple addresses, the time budget is shared across all fallback attempts.
 
 ### Server socket with SO_REUSEADDR
 
@@ -107,6 +125,35 @@ See the *extended* source file for a list of the options that are defined.
 ```
 
 The legacy parameter `create-socket-reuseaddr` still works, but passing an explicit argument is preferred.
+
+### Error predicates
+
+Fine-grained error checking is available via errno-specific predicates:
+
+```scheme
+(guard (e [(socket-connection-refused-error? e)
+           (display "Connection refused\n")]
+          [(socket-timed-out-error? e)
+           (display "Timed out\n")]
+          [(socket-error? e)
+           (display (socket-error-message e))])
+  (make-client-socket "127.0.0.1" "9999" (address-family inet) (socket-domain stream)
+                      0 (ip-protocol ip) #f 1.0))
+```
+
+Available predicates:
+- `socket-error-errno-is?` — generic errno comparison
+- `socket-connection-refused-error?` — `ECONNREFUSED`
+- `socket-timed-out-error?` — `ETIMEDOUT`
+- `socket-already-connected-error?` — `EISCONN`
+- `socket-connection-reset-error?` — `ECONNRESET`
+- `socket-connection-aborted-error?` — `ECONNABORTED`
+- `socket-network-unreachable-error?` — `ENETUNREACH`
+- `socket-host-unreachable-error?` — `EHOSTUNREACH`
+
+New errno constants for use with `socket-error-errno-is?`:
+`*einprogress*`, `*econnrefused*`, `*etimedout*`, `*eisconn*`,
+`*econnreset*`, `*econnaborted*`, `*enetunreach*`, `*ehostunreach*`
 
 ### Unix Domain Sockets (AF_UNIX)
 
@@ -230,6 +277,9 @@ bash .akku/env
 - **`socket-recv!`** now supports `start`/`count` arguments for receiving into a sub-range of a bytevector.
 - **`make-server-socket`** accepts optional `reuse-addr?` and `backlog` arguments at the end.
 - **`connect-server-socket`** and **`connect-client-socket`** accept an optional `reuse-addr?` argument.
+- **`make-client-socket`** accepts an optional `timeout` argument (float seconds) for connection timeout.
+- **`socket-send-all`** now reports the real errno on failure instead of hardcoding `*eagain*`, and auto-retries on `EINTR` in blocking mode.
+- **`connect-socket`** now tracks the real `errno` across the address-family fallback loop so error messages are accurate.
 
 ### New APIs
 
@@ -240,17 +290,27 @@ bash .akku/env
 | `socket-set-timeout!` | Sets `SO_RCVTIMEO` / `SO_SNDTIMEO` in seconds |
 | `socket-set-nonblocking!` | Enable/disable `O_NONBLOCK` via `fcntl` |
 | `socket-nonblocking?` | Query whether `O_NONBLOCK` is set |
-| `socket-send-all` | Loop `socket-send` until the entire bytevector is sent (TCP) |
+| `socket-send-all` | Loop `socket-send` until the entire bytevector is sent (TCP). Returns total bytes sent. |
 | `make-unix-client-socket` | Create an `AF_UNIX` client socket |
 | `make-unix-server-socket` | Create an `AF_UNIX` listening socket |
 | `mcast-drop-membership` | Leave a multicast group |
 | `getaddrinfo*` | Resolve host/service to a list of addrinfo records |
 | `socket-error?` | Predicate for the new structured exception type |
 | `socket-error-who` / `-errno` / `-message` | Accessors for `socket-error` |
+| `socket-error-errno-is?` | Generic errno comparison predicate |
+| `socket-connection-refused-error?` | `ECONNREFUSED` predicate |
+| `socket-timed-out-error?` | `ETIMEDOUT` predicate |
+| `socket-already-connected-error?` | `EISCONN` predicate |
+| `socket-connection-reset-error?` | `ECONNRESET` predicate |
+| `socket-connection-aborted-error?` | `ECONNABORTED` predicate |
+| `socket-network-unreachable-error?` | `ENETUNREACH` predicate |
+| `socket-host-unreachable-error?` | `EHOSTUNREACH` predicate |
 
 ### New constants
 
 - `*eagain*` `*ewouldblock*` `*eintr*` — for non-blocking error handling
+- `*einprogress*` `*econnrefused*` `*etimedout*` `*eisconn*`
+  `*econnreset*` `*econnaborted*` `*enetunreach*` `*ehostunreach*` — connection error constants
 - `*so-rcvtimeo*` `*so-sndtimeo*` — for timeout control
 - `*so-rcvbuf*` `*so-sndbuf*` — buffer size options
 - `*tcp-nodelay*` — disable Nagle algorithm (IPPROTO_TCP level)

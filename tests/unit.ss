@@ -348,6 +348,17 @@
       (socket-close cli)
       (socket-close srv))))
 
+;;; socket-send-all return value test
+(let ([srv (make-server-socket "15035" *af-inet* *sock-stream* *ipproto-ip* #t 128)])
+  (let ([cli (make-client-socket "127.0.0.1" "15035")])
+    (let ([conn (socket-accept srv)])
+      (let ([bv (string->utf8 "hello-world")])
+        (assert-equal 'socket-send-all-return (bytevector-length bv)
+                      (socket-send-all cli bv)))
+      (socket-close conn)
+      (socket-close cli)
+      (socket-close srv))))
+
 ;;; socket-close normal path test
 (let ([srv (make-server-socket "15029")])
   (socket-close srv)
